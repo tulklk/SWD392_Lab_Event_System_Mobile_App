@@ -1,0 +1,226 @@
+{
+  "appTitle": "FPT Lab System",
+  "@appTitle": {
+    "description": "The title of the application"
+  },
+  
+  "login": "Login",
+  "@login": {
+    "description": "Login button text"
+  },
+  
+  "name": "Name",
+  "@name": {
+    "description": "Name field label"
+  },
+  
+  "studentId": "Student ID",
+  "@studentId": {
+    "description": "Student ID field label"
+  },
+  
+  "role": "Role",
+  "@role": {
+    "description": "Role field label"
+  },
+  
+  "student": "Student",
+  "@student": {
+    "description": "Student role"
+  },
+  
+  "labManager": "Lab Manager",
+  "@labManager": {
+    "description": "Lab Manager role"
+  },
+  
+  "admin": "Admin",
+  "@admin": {
+    "description": "Admin role"
+  },
+  
+  "calendar": "Calendar",
+  "@calendar": {
+    "description": "Calendar tab title"
+  },
+  
+  "labs": "Labs",
+  "@labs": {
+    "description": "Labs tab title"
+  },
+  
+  "myBookings": "My Bookings",
+  "@myBookings": {
+    "description": "My Bookings tab title"
+  },
+  
+  "adminPanel": "Admin",
+  "@adminPanel": {
+    "description": "Admin tab title"
+  },
+  
+  "book": "Book",
+  "@book": {
+    "description": "Book button text"
+  },
+  
+  "create": "Create",
+  "@create": {
+    "description": "Create button text"
+  },
+  
+  "cancel": "Cancel",
+  "@cancel": {
+    "description": "Cancel button text"
+  },
+  
+  "save": "Save",
+  "@save": {
+    "description": "Save button text"
+  },
+  
+  "delete": "Delete",
+  "@delete": {
+    "description": "Delete button text"
+  },
+  
+  "edit": "Edit",
+  "@edit": {
+    "description": "Edit button text"
+  },
+  
+  "viewSchedule": "View Schedule",
+  "@viewSchedule": {
+    "description": "View Schedule button text"
+  },
+  
+  "bookNow": "Book Now",
+  "@bookNow": {
+    "description": "Book Now button text"
+  },
+  
+  "qrTicket": "QR Ticket",
+  "@qrTicket": {
+    "description": "QR Ticket button text"
+  },
+  
+  "scanQR": "Scan QR",
+  "@scanQR": {
+    "description": "Scan QR button text"
+  },
+  
+  "capacity": "Capacity",
+  "@capacity": {
+    "description": "Capacity field label"
+  },
+  
+  "location": "Location",
+  "@location": {
+    "description": "Location field label"
+  },
+  
+  "description": "Description",
+  "@description": {
+    "description": "Description field label"
+  },
+  
+  "title": "Title",
+  "@title": {
+    "description": "Title field label"
+  },
+  
+  "date": "Date",
+  "@date": {
+    "description": "Date field label"
+  },
+  
+  "startTime": "Start Time",
+  "@startTime": {
+    "description": "Start Time field label"
+  },
+  
+  "endTime": "End Time",
+  "@endTime": {
+    "description": "End Time field label"
+  },
+  
+  "participants": "Participants",
+  "@participants": {
+    "description": "Participants field label"
+  },
+  
+  "repeat": "Repeat",
+  "@repeat": {
+    "description": "Repeat field label"
+  },
+  
+  "none": "None",
+  "@none": {
+    "description": "None option"
+  },
+  
+  "weekly": "Weekly",
+  "@weekly": {
+    "description": "Weekly option"
+  },
+  
+  "pending": "Pending",
+  "@pending": {
+    "description": "Pending status"
+  },
+  
+  "approved": "Approved",
+  "@approved": {
+    "description": "Approved status"
+  },
+  
+  "rejected": "Rejected",
+  "@rejected": {
+    "description": "Rejected status"
+  },
+  
+  "cancelled": "Cancelled",
+  "@cancelled": {
+    "description": "Cancelled status"
+  },
+  
+  "manageLabs": "Manage Labs",
+  "@manageLabs": {
+    "description": "Manage Labs title"
+  },
+  
+  "manageEvents": "Manage Events",
+  "@manageEvents": {
+    "description": "Manage Events title"
+  },
+  
+  "noEventsToday": "No events scheduled for today",
+  "@noEventsToday": {
+    "description": "Message when no events are scheduled for the selected day"
+  },
+  
+  "noBookings": "No bookings found",
+  "@noBookings": {
+    "description": "Message when user has no bookings"
+  },
+  
+  "bookingCreated": "Booking created successfully",
+  "@bookingCreated": {
+    "description": "Success message when booking is created"
+  },
+  
+  "bookingCancelled": "Booking cancelled",
+  "@bookingCancelled": {
+    "description": "Success message when booking is cancelled"
+  },
+  
+  "conflictDetected": "Time conflict detected",
+  "@conflictDetected": {
+    "description": "Error message when there's a time conflict"
+  },
+  
+  "required": "This field is required",
+  "@required": {
+    "description": "Validation message for required fields"
+  }
+}
