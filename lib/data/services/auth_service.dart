@@ -132,6 +132,14 @@ class AuthService {
         return Failure('Google sign in was cancelled');
       }
 
+      // Validate email domain - Only allow @fpt.edu.vn
+      final email = googleUser.email;
+      if (!email.toLowerCase().endsWith('@fpt.edu.vn')) {
+        // Sign out from Google and reject login
+        await _googleSignIn.signOut();
+        return Failure('Only FPT University email addresses (@fpt.edu.vn) are allowed to sign in.');
+      }
+
       // 2. Get Google auth
       final googleAuth = await googleUser.authentication;
       final accessToken = googleAuth.accessToken;
@@ -153,7 +161,7 @@ class AuthService {
       }
 
       final userId = response.user!.id;
-      final email = response.user!.email ?? googleUser.email;
+      // Email already validated above
 
       // 4. Check if user exists in tbl_users (by userId first, then by email)
       final existingUser = await _getUserById(userId);
