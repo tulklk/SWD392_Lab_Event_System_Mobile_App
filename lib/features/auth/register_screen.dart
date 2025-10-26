@@ -57,11 +57,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             duration: Duration(seconds: 2),
           ),
         );
-        // Let router automatically redirect based on user role
+        // Redirect based on user role
         final user = result.data;
         if (user != null) {
-          // Router will auto-redirect based on role (admin → /admin, student → /home)
-          context.go('/');
+          // Redirect directly to appropriate page
+          switch (user.role) {
+            case Role.admin:
+            case Role.labManager:
+              context.go('/admin');
+              break;
+            case Role.student:
+            default:
+              context.go('/home');
+              break;
+          }
         }
       }
     } else {
