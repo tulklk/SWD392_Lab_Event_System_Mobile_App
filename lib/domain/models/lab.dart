@@ -1,28 +1,12 @@
 import 'package:hive/hive.dart';
 
-part 'lab.g.dart';
-
-@HiveType(typeId: 1)
 class Lab extends HiveObject {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String name;
-
-  @HiveField(2)
   final String location;
-
-  @HiveField(3)
   final int capacity;
-
-  @HiveField(4)
   final String description;
-
-  @HiveField(5)
   final DateTime createdAt;
-
-  @HiveField(6)
   final bool isActive;
 
   Lab({

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../domain/enums/role.dart';
 import 'auth_controller.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -13,10 +12,11 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _studentIdController = TextEditingController();
-  Role _selectedRole = Role.student;
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
+  bool _obscurePassword = true;
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
@@ -28,11 +28,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final authController = ref.read(authControllerProvider.notifier);
     
     final result = await authController.login(
-      name: _nameController.text.trim(),
-      studentId: _studentIdController.text.trim().isEmpty 
-          ? null 
-          : _studentIdController.text.trim(),
-      role: _selectedRole,
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
     );
 
     setState(() {
@@ -41,7 +38,46 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     if (result.isSuccess) {
       if (mounted) {
-        context.go('/home');
+        // Let router automatically redirect based on user role
+        final user = result.data;
+        if (user != null) {
+          // Router will auto-redirect based on role (admin → /admin, student → /home)
+          context.go('/');
+        }
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.error!),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _isGoogleLoading = true;
+    });
+
+    final authController = ref.read(authControllerProvider.notifier);
+    
+    final result = await authController.signInWithGoogle();
+
+    setState(() {
+      _isGoogleLoading = false;
+    });
+
+    if (result.isSuccess) {
+      if (mounted) {
+        // Let router automatically redirect based on user role
+        final user = result.data;
+        if (user != null) {
+          // Router will auto-redirect based on role (admin → /admin, student → /home)
+          context.go('/');
+        }
       }
     } else {
       if (mounted) {
@@ -80,6 +116,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          // Debug: Clear session button
+          IconButton(
+            onPressed: () async {
+              final authController = ref.read(authControllerProvider.notifier);
+              final result = await authController.logout();
+              if (mounted && result.isSuccess) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Session cleared! Try login again.'),
+                    backgroundColor: Colors.green,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            icon: const Icon(
+              Icons.logout,
+              color: Color(0xFF64748B),
+              size: 20,
+            ),
+            tooltip: 'Clear Session',
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -91,128 +151,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               children: [
                 const SizedBox(height: 20),
                 
-                // Select your role
+                // Email field
                 const Text(
-                  'Select your role',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                
-                // Role Selection
-                Column(
-                  children: [
-                    // Student
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: _selectedRole == Role.student 
-                              ? const Color(0xFFFF6600) 
-                              : const Color(0xFFE2E8F0),
-                          width: 2,
-                        ),
-                      ),
-                      child: RadioListTile<Role>(
-                        title: const Text(
-                          'Student',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                        value: Role.student,
-                        groupValue: _selectedRole,
-                        onChanged: (Role? value) {
-                          setState(() {
-                            _selectedRole = value!;
-                          });
-                        },
-                        activeColor: const Color(0xFFFF6600),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    
-                    // Lab Manager
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: _selectedRole == Role.labManager 
-                              ? const Color(0xFFFF6600) 
-                              : const Color(0xFFE2E8F0),
-                          width: 2,
-                        ),
-                      ),
-                      child: RadioListTile<Role>(
-                        title: const Text(
-                          'Lab Manager',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                        value: Role.labManager,
-                        groupValue: _selectedRole,
-                        onChanged: (Role? value) {
-                          setState(() {
-                            _selectedRole = value!;
-                          });
-                        },
-                        activeColor: const Color(0xFFFF6600),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    
-                    // Admin
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: _selectedRole == Role.admin 
-                              ? const Color(0xFFFF6600) 
-                              : const Color(0xFFE2E8F0),
-                          width: 2,
-                        ),
-                      ),
-                      child: RadioListTile<Role>(
-                        title: const Text(
-                          'Admin',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-                        value: Role.admin,
-                        groupValue: _selectedRole,
-                        onChanged: (Role? value) {
-                          setState(() {
-                            _selectedRole = value!;
-                          });
-                        },
-                        activeColor: const Color(0xFFFF6600),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                      ),
-                    ),
-                  ],
-                ),
-                
-                const SizedBox(height: 32),
-                
-                // Name field
-                const Text(
-                  'Name',
+                  'Email',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -221,12 +162,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
-                  controller: _nameController,
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
-                    hintText: 'Enter your name',
-                    hintStyle: TextStyle(
-                      color: Color(0xFF64748B),
-                    ),
+                    hintText: 'Enter your email',
+                    hintStyle: TextStyle(color: Color(0xFF64748B)),
+                    prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF64748B)),
                     border: OutlineInputBorder(
                       borderSide: BorderSide(color: Color(0xFFE2E8F0)),
                       borderRadius: BorderRadius.all(Radius.circular(8)),
@@ -244,7 +185,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your name';
+                      return 'Please enter your email';
+                    }
+                    if (!value.contains('@')) {
+                      return 'Please enter a valid email';
                     }
                     return null;
                   },
@@ -252,9 +196,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 
                 const SizedBox(height: 24),
                 
-                // Student ID field
+                // Password field
                 const Text(
-                  'Student ID',
+                  'Password',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -263,21 +207,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
-                  controller: _studentIdController,
-                  decoration: const InputDecoration(
-                    hintText: 'Enter your student ID',
-                    hintStyle: TextStyle(
-                      color: Color(0xFF64748B),
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    hintText: 'Enter your password',
+                    hintStyle: const TextStyle(color: Color(0xFF64748B)),
+                    prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF64748B)),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        color: const Color(0xFF64748B),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
                     ),
-                    border: OutlineInputBorder(
+                    border: const OutlineInputBorder(
                       borderSide: BorderSide(color: Color(0xFFE2E8F0)),
                       borderRadius: BorderRadius.all(Radius.circular(8)),
                     ),
-                    enabledBorder: OutlineInputBorder(
+                    enabledBorder: const OutlineInputBorder(
                       borderSide: BorderSide(color: Color(0xFFE2E8F0)),
                       borderRadius: BorderRadius.all(Radius.circular(8)),
                     ),
-                    focusedBorder: OutlineInputBorder(
+                    focusedBorder: const OutlineInputBorder(
                       borderSide: BorderSide(color: Color(0xFFFF6600)),
                       borderRadius: BorderRadius.all(Radius.circular(8)),
                     ),
@@ -285,11 +240,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     fillColor: Colors.white,
                   ),
                   validator: (value) {
-                    if (_selectedRole == Role.student && (value == null || value.trim().isEmpty)) {
-                      return 'Please enter your student ID';
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter your password';
                     }
                     return null;
                   },
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // Forgot password
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      // TODO: Implement forgot password
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Forgot password feature coming soon!'),
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      'Forgot Password?',
+                      style: TextStyle(
+                        color: Color(0xFFFF6600),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
                 
                 const Spacer(),
@@ -329,6 +309,103 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 
+                const SizedBox(height: 24),
+                
+                // Divider with OR
+                Row(
+                  children: [
+                    const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'OR',
+                        style: TextStyle(
+                          color: const Color(0xFF64748B),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
+                  ],
+                ),
+                
+                const SizedBox(height: 24),
+                
+                // Google Sign In Button
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _isGoogleLoading ? null : _handleGoogleSignIn,
+                    icon: _isGoogleLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFFFF6600),
+                            ),
+                          )
+                        : Image.asset(
+                            'assets/images/google_logo.png',
+                            width: 24,
+                            height: 24,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(
+                                Icons.login,
+                                color: Color(0xFFFF6600),
+                                size: 24,
+                              );
+                            },
+                          ),
+                    label: Text(
+                      _isGoogleLoading ? 'Signing in...' : 'Continue with Google',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: const BorderSide(color: Color(0xFFE2E8F0), width: 2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      backgroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 24),
+                
+                // Register link
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'Don\'t have an account? ',
+                      style: TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 14,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        context.go('/register');
+                      },
+                      child: const Text(
+                        'Sign Up',
+                        style: TextStyle(
+                          color: Color(0xFFFF6600),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                
                 const SizedBox(height: 20),
               ],
             ),
@@ -340,8 +417,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _studentIdController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 }

@@ -1,76 +1,127 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/models/user.dart';
 import '../../domain/enums/role.dart';
-import '../../data/repositories/user_repository.dart';
+import '../../data/services/auth_service.dart';
 import '../../core/utils/result.dart';
 
 class AuthController extends Notifier<AsyncValue<User?>> {
+  late final AuthService _authService;
+
   @override
   AsyncValue<User?> build() {
+    _authService = AuthService();
     _loadCurrentUser();
     return const AsyncValue.loading();
   }
 
-  UserRepository get _userRepository => ref.read(userRepositoryProvider);
-
   Future<void> _loadCurrentUser() async {
     try {
       state = const AsyncValue.loading();
-      // Ensure repository is initialized
-      await _userRepository.init();
-      final result = await _userRepository.getCurrentUser();
+      final result = await _authService.getCurrentUserProfile();
       
       if (result.isSuccess) {
         state = AsyncValue.data(result.data);
       } else {
-        state = AsyncValue.error(result.error!, StackTrace.current);
+        state = const AsyncValue.data(null);
       }
     } catch (error, stackTrace) {
       state = AsyncValue.error(error, stackTrace);
     }
   }
 
+  // Login with email and password
   Future<Result<User>> login({
-    required String name,
-    String? studentId,
-    required Role role,
+    required String email,
+    required String password,
   }) async {
     try {
-      // Ensure repository is initialized
-      await _userRepository.init();
-      
-      // Create or get user
-      final result = await _userRepository.createUser(
-        name: name,
-        studentId: studentId,
-        role: role.name,
+      final result = await _authService.login(
+        email: email,
+        password: password,
       );
 
       if (result.isSuccess) {
-        print('User created successfully: ${result.data!.name}');
-        // Set as current user
-        await _userRepository.setCurrentUser(result.data!.id);
-        print('Current user set to: ${result.data!.id}');
-        state = AsyncValue.data(result.data);
-        return result;
+        // Get user profile
+        final profileResult = await _authService.getCurrentUserProfile();
+        if (profileResult.isSuccess && profileResult.data != null) {
+          state = AsyncValue.data(profileResult.data);
+          return Success(profileResult.data!);
+        } else {
+          return Failure('Failed to load user profile');
+        }
       } else {
-        print('User creation failed: ${result.error}');
-        return result;
+        return Failure(result.error!);
       }
     } catch (e) {
       return Failure('Login failed: $e');
     }
   }
 
+  // Register with email and password
+  Future<Result<User>> register({
+    required String email,
+    required String password,
+    required String fullname,
+    required String username,
+    String? mssv,
+    required Role role,
+  }) async {
+    try {
+      final result = await _authService.register(
+        email: email,
+        password: password,
+        fullname: fullname,
+        username: username,
+        mssv: mssv,
+        role: role,
+      );
+
+      if (result.isSuccess && result.data != null) {
+        state = AsyncValue.data(result.data);
+        return Success(result.data!);
+      } else {
+        return Failure(result.error ?? 'Registration failed');
+      }
+    } catch (e) {
+      return Failure('Registration failed: $e');
+    }
+  }
+
+  // Sign in with Google
+  Future<Result<User>> signInWithGoogle() async {
+    try {
+      final result = await _authService.signInWithGoogle();
+
+      if (result.isSuccess && result.data != null) {
+        state = AsyncValue.data(result.data);
+        return Success(result.data!);
+      } else {
+        return Failure(result.error ?? 'Google sign in failed');
+      }
+    } catch (e) {
+      return Failure('Google sign in failed: $e');
+    }
+  }
+
+  // Logout
   Future<Result<void>> logout() async {
     try {
-      final result = await _userRepository.logout();
+      final result = await _authService.logout();
       if (result.isSuccess) {
         state = const AsyncValue.data(null);
       }
       return result;
     } catch (e) {
       return Failure('Logout failed: $e');
+    }
+  }
+
+  // Reset password
+  Future<Result<void>> resetPassword({required String email}) async {
+    try {
+      return await _authService.resetPassword(email: email);
+    } catch (e) {
+      return Failure('Password reset failed: $e');
     }
   }
 

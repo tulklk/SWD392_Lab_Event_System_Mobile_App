@@ -7,6 +7,8 @@ import '../../domain/enums/role.dart';
 import '../../domain/enums/booking_status.dart';
 import '../../domain/enums/repeat_rule.dart';
 
+/// Hive adapters for local storage
+/// Manual adapters - no code generation needed
 class HiveAdapters {
   static void registerAdapters() {
     // Register enum adapters
@@ -29,25 +31,46 @@ class UserAdapter extends TypeAdapter<User> {
 
   @override
   User read(BinaryReader reader) {
+    final numFields = reader.readByte();
+    final fields = <int, dynamic>{
+      for (int i = 0; i < numFields; i++) reader.readByte(): reader.read(),
+    };
+    
     return User(
-      id: reader.readString(),
-      name: reader.readString(),
-      studentId: reader.readBool() ? reader.readString() : null,
-      role: Role.values[reader.readByte()],
-      createdAt: DateTime.fromMillisecondsSinceEpoch(reader.readInt()),
+      id: fields[0] as String,
+      username: fields[1] as String,
+      fullname: fields[2] as String,
+      email: fields[3] as String,
+      mssv: fields[4] as String?,
+      status: fields[5] as int? ?? 1,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(fields[6] as int),
+      lastUpdatedAt: DateTime.fromMillisecondsSinceEpoch(fields[7] as int),
+      roles: (fields[8] as List?)?.cast<Role>() ?? [Role.student],
     );
   }
 
   @override
   void write(BinaryWriter writer, User obj) {
-    writer.writeString(obj.id);
-    writer.writeString(obj.name);
-    writer.writeBool(obj.studentId != null);
-    if (obj.studentId != null) {
-      writer.writeString(obj.studentId!);
-    }
-    writer.writeByte(obj.role.index);
-    writer.writeInt(obj.createdAt.millisecondsSinceEpoch);
+    writer
+      ..writeByte(9) // number of fields
+      ..writeByte(0)
+      ..write(obj.id)
+      ..writeByte(1)
+      ..write(obj.username)
+      ..writeByte(2)
+      ..write(obj.fullname)
+      ..writeByte(3)
+      ..write(obj.email)
+      ..writeByte(4)
+      ..write(obj.mssv)
+      ..writeByte(5)
+      ..write(obj.status)
+      ..writeByte(6)
+      ..write(obj.createdAt.millisecondsSinceEpoch)
+      ..writeByte(7)
+      ..write(obj.lastUpdatedAt.millisecondsSinceEpoch)
+      ..writeByte(8)
+      ..write(obj.roles);
   }
 }
 

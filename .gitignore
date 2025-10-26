@@ -43,3 +43,16 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Supabase credentials - DO NOT COMMIT
+lib/core/config/supabase_config.dart
+
+# Firebase credentials - DO NOT COMMIT
+android/app/google-services.json
+
+# Platform folders (removed - Android only)
+ios/
+macos/
+linux/
+windows/
+web/

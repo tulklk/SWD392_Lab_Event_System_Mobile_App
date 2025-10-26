@@ -129,9 +129,11 @@ class SeedData {
 
   static Future<void> _seedAdminUser(UserRepository userRepository) async {
     await userRepository.createUser(
-      name: 'Admin User',
-      studentId: 'ADMIN001',
-      role: Role.admin.name,
+      username: 'admin',
+      fullname: 'Admin User',
+      email: 'admin@fpt.edu.vn',
+      mssv: 'ADMIN001',
+      role: Role.admin,
     );
   }
 }
