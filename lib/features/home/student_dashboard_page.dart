@@ -1,12 +1,86 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../auth/auth_controller.dart';
+import '../../domain/models/event.dart';
+import '../../data/repositories/event_repository.dart';
 
-class StudentDashboardPage extends ConsumerWidget {
+class StudentDashboardPage extends ConsumerStatefulWidget {
   const StudentDashboardPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StudentDashboardPage> createState() => _StudentDashboardPageState();
+}
+
+class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage> {
+  List<Event> _upcomingEvents = [];
+  bool _isLoadingEvents = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUpcomingEvents();
+  }
+
+  Future<void> _loadUpcomingEvents() async {
+    setState(() => _isLoadingEvents = true);
+    
+    final eventRepository = EventRepository();
+    final result = await eventRepository.getUpcomingEvents();
+    
+    if (mounted) {
+      setState(() {
+        _upcomingEvents = result.isSuccess ? result.data! : [];
+        _isLoadingEvents = false;
+      });
+    }
+  }
+
+  String _formatEventTime(Event event) {
+    if (event.startDate == null || event.endDate == null) return '';
+    final startTime = DateFormat('h:mm a').format(event.startDate!);
+    final endTime = DateFormat('h:mm a').format(event.endDate!);
+    return '$startTime - $endTime';
+  }
+
+  String _getEventStatus(Event event) {
+    if (event.startDate == null) return '';
+    
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final eventDate = DateTime(
+      event.startDate!.year,
+      event.startDate!.month,
+      event.startDate!.day,
+    );
+    
+    final diff = eventDate.difference(today).inDays;
+    
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Tomorrow';
+    return DateFormat('EEE, MMM d').format(eventDate);
+  }
+
+  Color _getEventStatusColor(Event event) {
+    if (event.startDate == null) return const Color(0xFF64748B);
+    
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final eventDate = DateTime(
+      event.startDate!.year,
+      event.startDate!.month,
+      event.startDate!.day,
+    );
+    
+    final diff = eventDate.difference(today).inDays;
+    
+    if (diff == 0) return const Color(0xFFEF4444); // Red for today
+    if (diff == 1) return const Color(0xFFF59E0B); // Orange for tomorrow
+    return const Color(0xFF1A73E8); // Blue for future
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider);
     
     return Scaffold(
@@ -45,9 +119,9 @@ class StudentDashboardPage extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
-                          'FPT Lab Events',
-                          style: TextStyle(
+                        Text(
+                          currentUser?.fullname ?? 'Student',
+                          style: const TextStyle(
                             fontSize: 14,
                             color: Color(0xFF64748B),
                           ),
@@ -138,50 +212,68 @@ class StudentDashboardPage extends ConsumerWidget {
                     color: Color(0xFF1E293B),
                   ),
                 ),
-                TextButton(
-                  onPressed: () {},
-                  child: const Text(
-                    'View All',
-                    style: TextStyle(
-                      color: Color(0xFF1A73E8),
-                      fontWeight: FontWeight.w600,
+                if (!_isLoadingEvents)
+                  TextButton(
+                    onPressed: () {},
+                    child: const Text(
+                      'View All',
+                      style: TextStyle(
+                        color: Color(0xFF1A73E8),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 12),
             
-            // Event Cards
-            _buildEventCard(
-              context,
-              title: 'Machine Learning Workshop',
-              time: '10:00 AM - 12:00 PM',
-              location: 'Computer Lab A',
-              participants: '25 participants',
-              status: 'Today',
-              statusColor: const Color(0xFF1A73E8),
-            ),
-            const SizedBox(height: 12),
-            _buildEventCard(
-              context,
-              title: 'Database Design Session',
-              time: '2:00 PM - 4:00 PM',
-              location: 'Computer Lab B',
-              participants: '20 participants',
-              status: 'Tomorrow',
-              statusColor: const Color(0xFF1A73E8),
-            ),
-            const SizedBox(height: 12),
-            _buildEventCard(
-              context,
-              title: 'Mobile App Development',
-              time: '9:00 AM - 11:00 AM',
-              location: 'Computer Lab C',
-              participants: '30 participants',
-              status: 'Wed, Dec 25',
-              statusColor: const Color(0xFF1A73E8),
-            ),
+            // Event Cards - Load from database
+            if (_isLoadingEvents)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (_upcomingEvents.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.event_busy,
+                      size: 48,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No upcoming events',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ..._upcomingEvents.take(3).map((event) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildEventCard(
+                  context,
+                  title: event.title,
+                  time: _formatEventTime(event),
+                  location: event.location ?? 'No location',
+                  participants: '',
+                  status: _getEventStatus(event),
+                  statusColor: _getEventStatusColor(event),
+                ),
+              )).toList(),
             const SizedBox(height: 24),
 
             // Lab Status
@@ -355,23 +447,24 @@ class StudentDashboardPage extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.access_time,
-                      size: 16,
-                      color: Color(0xFF64748B),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      time,
-                      style: const TextStyle(
-                        fontSize: 12,
+                if (time.isNotEmpty)
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.access_time,
+                        size: 16,
                         color: Color(0xFF64748B),
                       ),
-                    ),
-                  ],
-                ),
+                      const SizedBox(width: 4),
+                      Text(
+                        time,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
@@ -381,29 +474,13 @@ class StudentDashboardPage extends ConsumerWidget {
                       color: Color(0xFF64748B),
                     ),
                     const SizedBox(width: 4),
-                    Text(
-                      location,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.people,
-                      size: 16,
-                      color: Color(0xFF64748B),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      participants,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
+                    Expanded(
+                      child: Text(
+                        location,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
+                        ),
                       ),
                     ),
                   ],

@@ -2,7 +2,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../domain/models/room.dart';
+import '../../domain/models/room_slot.dart';
 import '../../data/repositories/room_repository.dart';
+import '../../data/repositories/room_slot_repository.dart';
 import '../../core/utils/result.dart';
 
 class LabsScreen extends ConsumerStatefulWidget {
@@ -613,106 +615,417 @@ class _LabsScreenState extends ConsumerState<LabsScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
+      builder: (context) => _RoomDetailsSheet(room: room),
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: const Color(0xFF64748B)),
+          const SizedBox(width: 12),
+          Text(
+            '$label: ',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF64748B),
               ),
             ),
-            // Room details content
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      room.name,
-                      style: const TextStyle(
-                        fontSize: 24,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _bookRoom(Room room) async {
+    // Navigate to booking form and wait for result
+    await context.push('/bookings/new', extra: {
+      'roomId': room.id,
+      'roomName': room.name,
+    });
+    // Note: Booking form will return true if booking was successful
+    // Parent screens (like My Bookings) can listen to this result
+  }
+
+  Widget _buildStatItem(String count, String label, Color color) {
+    return Column(
+      children: [
+        Text(
+          count,
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF64748B),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Room Details Bottom Sheet with Slots
+class _RoomDetailsSheet extends StatefulWidget {
+  final Room room;
+  
+  const _RoomDetailsSheet({required this.room});
+
+  @override
+  State<_RoomDetailsSheet> createState() => _RoomDetailsSheetState();
+}
+
+class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
+  final _roomSlotRepository = RoomSlotRepository();
+  List<RoomSlot> _roomSlots = [];
+  bool _isLoadingSlots = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRoomSlots();
+  }
+
+  Future<void> _loadRoomSlots() async {
+    setState(() => _isLoadingSlots = true);
+    
+    final result = await _roomSlotRepository.getSlotsByRoomId(widget.room.id);
+    
+    if (result.isSuccess && mounted) {
+      setState(() {
+        _roomSlots = result.data!;
+        _isLoadingSlots = false;
+      });
+    } else {
+      setState(() => _isLoadingSlots = false);
+    }
+  }
+
+  Map<int, List<RoomSlot>> _groupSlotsByDay() {
+    final Map<int, List<RoomSlot>> grouped = {};
+    
+    for (final slot in _roomSlots) {
+      if (!grouped.containsKey(slot.dayOfWeek)) {
+        grouped[slot.dayOfWeek] = [];
+      }
+      grouped[slot.dayOfWeek]!.add(slot);
+    }
+    
+    // Sort slots within each day by start time
+    for (final slots in grouped.values) {
+      slots.sort((a, b) => a.startTime.compareTo(b.startTime));
+    }
+    
+    return grouped;
+  }
+
+  String _formatTime(DateTime time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final slotsByDay = _groupSlotsByDay();
+    
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          // Handle bar
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          
+          // Room details content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Room Name
+                  Text(
+                    widget.room.name,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Room Info
+                  if (widget.room.location != null)
+                    _buildDetailRow(Icons.location_on, 'Location', widget.room.location!),
+                  _buildDetailRow(
+                    Icons.people,
+                    'Capacity',
+                    '${widget.room.capacity} people',
+                  ),
+                  _buildDetailRow(
+                    Icons.info_outline,
+                    'Status',
+                    widget.room.isActive ? 'Active' : 'Maintenance',
+                  ),
+                  
+                  // Description
+                  if (widget.room.description != null) ...[
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Description',
+                      style: TextStyle(
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF1E293B),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    if (room.location != null)
-                      _buildDetailRow(Icons.location_on, 'Location', room.location!),
-                    _buildDetailRow(
-                      Icons.people,
-                      'Capacity',
-                      '${room.capacity} people',
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.room.description!,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF64748B),
+                      ),
                     ),
-                    _buildDetailRow(
-                      Icons.info_outline,
-                      'Status',
-                      room.isActive ? 'Active' : 'Maintenance',
-                    ),
-                    if (room.description != null) ...[
-                      const SizedBox(height: 16),
+                  ],
+                  
+                  // Room Slots Section
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.schedule,
+                        color: Color(0xFF1A73E8),
+                        size: 24,
+                      ),
+                      const SizedBox(width: 8),
                       const Text(
-                        'Description',
+                        'Available Time Slots',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF1E293B),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        room.description!,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF64748B),
+                      const Spacer(),
+                      if (_isLoadingSlots)
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         ),
-                      ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Slots by Day
+                  if (!_isLoadingSlots) ...[
+                    if (_roomSlots.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.shade200),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.orange),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'No time slots configured for this room yet.',
+                                style: TextStyle(color: Colors.orange),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ...List.generate(7, (dayIndex) {
+                        final dayOfWeek = dayIndex + 1; // 1-7
+                        final slots = slotsByDay[dayOfWeek] ?? [];
+                        
+                        if (slots.isEmpty) return const SizedBox.shrink();
+                        
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Day Header
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1A73E8).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today,
+                                      size: 16,
+                                      color: const Color(0xFF1A73E8),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _getDayName(dayOfWeek),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF1A73E8),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Text(
+                                      '${slots.length} slots',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: const Color(0xFF1A73E8).withOpacity(0.7),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              
+                              // Slots for this day
+                              ...slots.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final slot = entry.value;
+                                
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: const Color(0xFFE2E8F0),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 50,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 4,
+                                          horizontal: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF10B981).withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          'Slot ${index + 1}',
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF10B981),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Icon(
+                                        Icons.access_time,
+                                        size: 16,
+                                        color: Colors.grey[600],
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '${_formatTime(slot.startTime)} - ${_formatTime(slot.endTime)}',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF1E293B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ],
+                          ),
+                        );
+                      }),
                   ],
-                ),
+                ],
               ),
             ),
-            // Action button
-            if (room.isActive)
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _bookRoom(room);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6600),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+          ),
+          
+          // Action button
+          if (widget.room.isActive)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    // Navigate to booking form
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const SizedBox(), // Will be replaced by router
                       ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6600),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Text(
-                      'Book This Room',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  ),
+                  child: const Text(
+                    'Book This Room',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -746,35 +1059,24 @@ class _LabsScreenState extends ConsumerState<LabsScreen> {
     );
   }
 
-  void _bookRoom(Room room) {
-    // Navigate to booking form
-    context.push('/bookings/new', extra: {
-      'roomId': room.id,
-      'roomName': room.name,
-    });
-  }
-
-  Widget _buildStatItem(String count, String label, Color color) {
-    return Column(
-      children: [
-        Text(
-          count,
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Color(0xFF64748B),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
+  String _getDayName(int dayOfWeek) {
+    switch (dayOfWeek) {
+      case 1:
+        return 'Monday';
+      case 2:
+        return 'Tuesday';
+      case 3:
+        return 'Wednesday';
+      case 4:
+        return 'Thursday';
+      case 5:
+        return 'Friday';
+      case 6:
+        return 'Saturday';
+      case 7:
+        return 'Sunday';
+      default:
+        return 'Unknown';
+    }
   }
 }

@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import '../../domain/models/booking.dart';
 
 class QRTicketScreen extends StatelessWidget {
-  final String bookingId;
+  final Booking booking;
   
-  const QRTicketScreen({super.key, required this.bookingId});
+  const QRTicketScreen({super.key, required this.booking});
 
   @override
   Widget build(BuildContext context) {
+    final statusColor = _getStatusColor();
+    
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -26,12 +30,12 @@ class QRTicketScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFF10B981),
+                color: statusColor,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Text(
-                'Confirmed',
-                style: TextStyle(
+              child: Text(
+                booking.bookingStatus.displayName,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -41,9 +45,7 @@ class QRTicketScreen extends StatelessWidget {
           ],
         ),
         leading: IconButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
           icon: const Icon(
             Icons.arrow_back,
             color: Color(0xFF1E293B),
@@ -72,7 +74,7 @@ class QRTicketScreen extends StatelessWidget {
               child: Column(
                 children: [
                   const Text(
-                    'Lab Access QR Code',
+                    'Room Access QR Code',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -81,7 +83,7 @@ class QRTicketScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Show this QR code at the lab entrance',
+                    'Show this QR code at the room entrance',
                     style: TextStyle(
                       fontSize: 14,
                       color: Color(0xFF64748B),
@@ -91,8 +93,6 @@ class QRTicketScreen extends StatelessWidget {
                   
                   // QR Code
                   Container(
-                    width: 200,
-                    height: 200,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -105,26 +105,17 @@ class QRTicketScreen extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // QR Code placeholder - in real app, use qr_flutter package
-                        Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1E293B),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.qr_code,
-                              color: Colors.white,
-                              size: 80,
-                            ),
-                          ),
+                        // QR Code
+                        QrImageView(
+                          data: booking.id,
+                          version: QrVersions.auto,
+                          size: 200.0,
+                          backgroundColor: Colors.white,
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'FPT-LAB - 175913874221',
-                          style: TextStyle(
+                        Text(
+                          'FPT-LAB-${booking.id.substring(0, 8)}',
+                          style: const TextStyle(
                             fontSize: 10,
                             color: Color(0xFF64748B),
                             fontFamily: 'monospace',
@@ -156,9 +147,9 @@ class QRTicketScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Machine Learning Workshop',
-                    style: TextStyle(
+                  Text(
+                    booking.purpose,
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF1E293B),
@@ -168,28 +159,24 @@ class QRTicketScreen extends StatelessWidget {
                   
                   _buildDetailRow(
                     Icons.access_time,
-                    'Monday, December 23, 2024\n10:00 AM - 12:00 PM',
+                    '${_formatLongDate(booking.date)}\n${_formatTime(booking.start)} - ${_formatTime(booking.end)}',
                   ),
                   const SizedBox(height: 12),
                   
                   _buildDetailRow(
-                    Icons.location_on,
-                    'Computer Lab A\nBuilding A, Floor 2, Room 205',
+                    Icons.meeting_room,
+                    'Room ID: ${booking.roomId}',
                   ),
-                  const SizedBox(height: 12),
                   
-                  _buildDetailRow(
-                    Icons.people,
-                    '25 participants',
-                  ),
-                  const SizedBox(height: 12),
+                  if (booking.notes != null && booking.notes!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                      Icons.note,
+                      booking.notes!,
+                    ),
+                  ],
                   
-                  _buildDetailRow(
-                    Icons.person,
-                    'Organized by John Doe',
-                  ),
                   const SizedBox(height: 16),
-                  
                   const Divider(color: Color(0xFFE2E8F0)),
                   const SizedBox(height: 16),
                   
@@ -202,9 +189,9 @@ class QRTicketScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'FPT-LAB-175913874221',
-                    style: TextStyle(
+                  Text(
+                    'FPT-LAB-${booking.id.substring(0, 12)}',
+                    style: const TextStyle(
                       fontSize: 16,
                       color: Color(0xFF1E293B),
                       fontWeight: FontWeight.w600,
@@ -242,9 +229,10 @@ class QRTicketScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   
                   _buildInstruction('• Arrive 5 minutes before your scheduled time'),
-                  _buildInstruction('• Show this QR code to the lab supervisor'),
+                  _buildInstruction('• Show this QR code to the room supervisor'),
                   _buildInstruction('• Keep your student ID with you'),
                   _buildInstruction('• Follow lab safety guidelines'),
+                  _buildInstruction('• Return equipment to original location after use'),
                 ],
               ),
             ),
@@ -269,7 +257,9 @@ class QRTicketScreen extends StatelessWidget {
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: () {
-                  // Download QR code
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Download feature coming soon!')),
+                  );
                 },
                 icon: const Icon(
                   Icons.download,
@@ -295,7 +285,9 @@ class QRTicketScreen extends StatelessWidget {
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: () {
-                  // Share QR code
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Share feature coming soon!')),
+                  );
                 },
                 icon: const Icon(
                   Icons.share,
@@ -321,6 +313,18 @@ class QRTicketScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Color _getStatusColor() {
+    if (booking.isApproved) {
+      return const Color(0xFF10B981);
+    } else if (booking.isPending) {
+      return const Color(0xFFF59E0B);
+    } else if (booking.isRejected) {
+      return const Color(0xFFEF4444);
+    } else {
+      return const Color(0xFF64748B);
+    }
   }
 
   Widget _buildDetailRow(IconData icon, String text) {
@@ -359,5 +363,18 @@ class QRTicketScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _formatLongDate(DateTime date) {
+    final days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return '${days[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  String _formatTime(DateTime time) {
+    final hour = time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.hour >= 12 ? 'PM' : 'AM';
+    return '$hour:$minute $period';
   }
 }

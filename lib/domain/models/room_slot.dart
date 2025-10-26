@@ -43,10 +43,24 @@ class RoomSlot {
       id: json['Id'] as String,
       roomId: json['RoomId'] as String,
       dayOfWeek: json['DayOfWeek'] as int,
-      startTime: DateTime.parse(json['StartTime'] as String),
-      endTime: DateTime.parse(json['EndTime'] as String),
+      startTime: _parseTime(json['StartTime'] as String),
+      endTime: _parseTime(json['EndTime'] as String),
       createdAt: DateTime.parse(json['CreatedAt'] as String),
       lastUpdatedAt: DateTime.parse(json['LastUpdatedAt'] as String),
+    );
+  }
+
+  // Parse time string (HH:mm:ss) from Supabase to DateTime
+  static DateTime _parseTime(String timeString) {
+    final parts = timeString.split(':');
+    final now = DateTime.now();
+    return DateTime(
+      now.year,
+      now.month,
+      now.day,
+      int.parse(parts[0]), // hour
+      int.parse(parts[1]), // minute
+      parts.length > 2 ? int.parse(parts[2].split('.')[0]) : 0, // second
     );
   }
 
@@ -55,11 +69,19 @@ class RoomSlot {
       'Id': id,
       'RoomId': roomId,
       'DayOfWeek': dayOfWeek,
-      'StartTime': startTime.toIso8601String(),
-      'EndTime': endTime.toIso8601String(),
+      'StartTime': _formatTime(startTime),
+      'EndTime': _formatTime(endTime),
       'CreatedAt': createdAt.toIso8601String(),
       'LastUpdatedAt': lastUpdatedAt.toIso8601String(),
     };
+  }
+
+  // Format DateTime to time string (HH:mm:ss) for Supabase
+  static String _formatTime(DateTime time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    final second = time.second.toString().padLeft(2, '0');
+    return '$hour:$minute:$second';
   }
 
   String get dayName {

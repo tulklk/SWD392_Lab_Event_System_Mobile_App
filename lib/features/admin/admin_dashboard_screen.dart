@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/enums/role.dart';
 import '../auth/auth_controller.dart';
+import 'seed_data_screen.dart';
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -137,6 +138,38 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 child: _buildStatCard('156', 'This Week', const Color(0xFFF59E0B), Icons.bar_chart),
               ),
             ],
+          ),
+          const SizedBox(height: 32),
+          
+          // Seed Data Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SeedDataScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.settings_suggest),
+              label: const Text(
+                'Seed Room Slots Data',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 32),
           
