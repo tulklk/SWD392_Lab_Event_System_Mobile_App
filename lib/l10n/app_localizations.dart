@@ -134,11 +134,11 @@ abstract class AppLocalizations {
   /// **'Student'**
   String get student;
 
-  /// Lab Manager role
+  /// Lecturer role
   ///
   /// In en, this message translates to:
-  /// **'Lab Manager'**
-  String get labManager;
+  /// **'Lecturer'**
+  String get lecturer;
 
   /// Admin role
   ///

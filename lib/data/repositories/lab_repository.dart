@@ -15,15 +15,20 @@ class LabRepository {
     required String location,
     required int capacity,
     required String description,
+    required String roomId,
   }) async {
     try {
+      final now = DateTime.now();
       final lab = Lab(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         name: name,
         location: location,
         capacity: capacity,
         description: description,
-        createdAt: DateTime.now(),
+        createdAt: now,
+        lastUpdatedAt: now,
+        roomId: roomId,
+        status: 1,
       );
 
       await _box.put(lab.id, lab);
@@ -64,7 +69,7 @@ class LabRepository {
     try {
       final lab = _box.get(id);
       if (lab != null) {
-        final updatedLab = lab.copyWith(isActive: false);
+        final updatedLab = lab.copyWith(status: 0);
         await _box.put(id, updatedLab);
       }
       return const Success(null);

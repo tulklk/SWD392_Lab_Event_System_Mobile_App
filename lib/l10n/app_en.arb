@@ -29,9 +29,9 @@
     "description": "Student role"
   },
   
-  "labManager": "Lab Manager",
-  "@labManager": {
-    "description": "Lab Manager role"
+  "lecturer": "Lecturer",
+  "@lecturer": {
+    "description": "Lecturer role"
   },
   
   "admin": "Admin",

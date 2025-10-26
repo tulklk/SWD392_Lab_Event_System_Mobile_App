@@ -15,7 +15,7 @@ class BookingDetailBottomSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final statusColor = _getStatusColor(booking.status, theme);
+    final statusColor = _getStatusColor(booking.bookingStatus, theme);
     
     return Container(
       padding: const EdgeInsets.all(24),
@@ -34,7 +34,7 @@ class BookingDetailBottomSheet extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
-                  _getStatusIcon(booking.status),
+                  _getStatusIcon(booking.bookingStatus),
                   color: statusColor,
                   size: 24,
                 ),
@@ -58,7 +58,7 @@ class BookingDetailBottomSheet extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        booking.status.displayName,
+                        booking.bookingStatus.displayName,
                         style: TextStyle(
                           color: statusColor,
                           fontSize: 12,
@@ -88,15 +88,9 @@ class BookingDetailBottomSheet extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           _buildDetailRow(
-            Icons.people,
-            'Participants',
-            '${booking.participants}',
-          ),
-          const SizedBox(height: 12),
-          _buildDetailRow(
-            Icons.repeat,
-            'Repeat',
-            booking.repeatRule.displayName,
+            Icons.description,
+            'Purpose',
+            booking.purpose,
           ),
           
           if (booking.notes != null && booking.notes!.isNotEmpty) ...[

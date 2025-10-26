@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'student_dashboard_page.dart';
-import 'lab_manager_dashboard_page.dart';
+import 'lecturer_dashboard_page.dart';
 import '../calendar/calendar_screen.dart';
 import '../labs/labs_screen.dart';
 import '../bookings/my_bookings_screen.dart';
@@ -25,7 +25,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider);
     final isAdmin = ref.watch(isAdminProvider);
-    final isLabManager = ref.watch(isLabManagerProvider);
+    final isLecturer = ref.watch(isLecturerProvider);
     final isStudent = ref.watch(isStudentProvider);
     
     // Define screens and navigation based on role
@@ -62,10 +62,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           label: 'My Bookings',
         ),
       ];
-    } else if (isLabManager) {
-      // Lab Manager: Home, Calendar, Labs, Bookings Management, and Lab Management
+    } else if (isLecturer) {
+      // Lecturer: Home, Calendar, Labs, Bookings Management, and Lab Management
       screens = [
-        const LabManagerDashboardPage(),
+        const LecturerDashboardPage(),
         const CalendarScreen(),
         const LabsScreen(),
         const MyBookingsScreen(),

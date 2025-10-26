@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/utils/result.dart';
 import '../domain/enums/role.dart';
-import '../features/auth/splash_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
 import '../features/home/home_screen.dart';
@@ -48,8 +47,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           case Role.admin:
             print('Redirecting admin to admin dashboard');
             return '/admin';
-          case Role.labManager:
-            print('Redirecting lab manager to admin dashboard');
+          case Role.lecturer:
+            print('Redirecting lecturer to admin dashboard');
             return '/admin';
           case Role.student:
           default:
@@ -62,11 +61,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/',
-        name: 'splash',
-        builder: (context, state) => const SplashScreen(),
-      ),
       GoRoute(
         path: '/login',
         name: 'login',
@@ -127,8 +121,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             error: (_, __) => null,
           );
           
-          // Only admin and lab manager can access admin routes
-          if (currentUser?.role != Role.admin && currentUser?.role != Role.labManager) {
+          // Only admin and lecturer can access admin routes
+          if (currentUser?.role != Role.admin && currentUser?.role != Role.lecturer) {
             return '/home';
           }
           return null;
@@ -146,8 +140,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                 error: (_, __) => null,
               );
               
-              // Only admin and lab manager can manage labs
-              if (currentUser?.role != Role.admin && currentUser?.role != Role.labManager) {
+              // Only admin and lecturer can manage labs
+              if (currentUser?.role != Role.admin && currentUser?.role != Role.lecturer) {
                 return '/home';
               }
               return null;

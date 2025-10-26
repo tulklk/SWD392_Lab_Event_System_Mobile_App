@@ -45,7 +45,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           // Redirect directly to appropriate page
           switch (user.role) {
             case Role.admin:
-            case Role.labManager:
+            case Role.lecturer:
               context.go('/admin');
               break;
             case Role.student:
@@ -88,7 +88,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           // Redirect directly to appropriate page
           switch (user.role) {
             case Role.admin:
-            case Role.labManager:
+            case Role.lecturer:
               context.go('/admin');
               break;
             case Role.student:

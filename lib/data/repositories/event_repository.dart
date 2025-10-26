@@ -11,23 +11,28 @@ class EventRepository {
   }
 
   Future<Result<Event>> createEvent({
-    required String labId,
     required String title,
     required String description,
     required DateTime start,
     required DateTime end,
     required String createdBy,
+    String? location,
+    bool visibility = true,
   }) async {
     try {
+      final now = DateTime.now();
       final event = Event(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        labId: labId,
         title: title,
         description: description,
-        start: start,
-        end: end,
+        startDate: start,
+        endDate: end,
         createdBy: createdBy,
-        createdAt: DateTime.now(),
+        createdAt: now,
+        lastUpdatedAt: now,
+        location: location,
+        visibility: visibility,
+        status: 1,
       );
 
       await _box.put(event.id, event);
@@ -72,14 +77,14 @@ class EventRepository {
     }
   }
 
-  Future<Result<List<Event>>> getEventsForLab(String labId) async {
+  Future<Result<List<Event>>> getEventsForLocation(String location) async {
     try {
       final events = _box.values
-          .where((event) => event.isActive && event.labId == labId)
+          .where((event) => event.isActive && event.location == location)
           .toList();
       return Success(events);
     } catch (e) {
-      return Failure('Failed to get events for lab: $e');
+      return Failure('Failed to get events for location: $e');
     }
   }
 
@@ -96,7 +101,7 @@ class EventRepository {
     try {
       final event = _box.get(id);
       if (event != null) {
-        final updatedEvent = event.copyWith(isActive: false);
+        final updatedEvent = event.copyWith(status: 2); // 2 = cancelled
         await _box.put(id, updatedEvent);
       }
       return const Success(null);
