@@ -5,6 +5,7 @@ import '../core/utils/result.dart';
 import '../domain/enums/role.dart';
 import '../features/auth/splash_screen.dart';
 import '../features/auth/login_screen.dart';
+import '../features/auth/register_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/labs/lab_detail_screen.dart';
 import '../features/bookings/booking_form_screen.dart';
@@ -27,16 +28,35 @@ final routerProvider = Provider<GoRouter>((ref) {
       );
       print('Current user: ${currentUser?.name} (${currentUser?.role})');
       
-      // If no user is logged in and not on splash or login page, redirect to splash
-      if (currentUser == null && state.uri.path != '/' && state.uri.path != '/login') {
+      // If no user is logged in and not on splash, login, or register page, redirect to splash
+      if (currentUser == null && 
+          state.uri.path != '/' && 
+          state.uri.path != '/login' && 
+          state.uri.path != '/register') {
         print('No user found, redirecting to splash');
         return '/';
       }
       
-      // If user is logged in and on splash or login page, redirect to home
-      if (currentUser != null && (state.uri.path == '/' || state.uri.path == '/login')) {
-        print('User logged in, redirecting to home');
-        return '/home';
+      // If user is logged in and on splash, login, or register page, redirect based on role
+      if (currentUser != null && 
+          (state.uri.path == '/' || 
+           state.uri.path == '/login' || 
+           state.uri.path == '/register')) {
+        print('User logged in with role: ${currentUser.role}');
+        
+        // Redirect based on user role
+        switch (currentUser.role) {
+          case Role.admin:
+            print('Redirecting admin to admin dashboard');
+            return '/admin';
+          case Role.labManager:
+            print('Redirecting lab manager to admin dashboard');
+            return '/admin';
+          case Role.student:
+          default:
+            print('Redirecting student to home');
+            return '/home';
+        }
       }
       
       print('No redirect needed');
@@ -52,6 +72,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/login',
         name: 'login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/register',
+        name: 'register',
+        builder: (context, state) => const RegisterScreen(),
       ),
       GoRoute(
         path: '/home',

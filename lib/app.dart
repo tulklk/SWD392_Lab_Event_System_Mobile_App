@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'core/l10n/l10n.dart';
+import 'core/config/supabase_config.dart';
 import 'data/local/hive_adapters.dart';
 import 'data/seed/seed_data.dart';
 import 'data/repositories/lab_repository.dart';
@@ -59,7 +61,14 @@ class _AppInitializerState extends ConsumerState<AppInitializer> {
 
   Future<void> _initializeApp() async {
     try {
-      // Initialize Hive
+      // Initialize Supabase
+      await Supabase.initialize(
+        url: SupabaseConfig.supabaseUrl,
+        anonKey: SupabaseConfig.supabaseAnonKey,
+      );
+      debugPrint('Supabase initialized successfully');
+      
+      // Initialize Hive (for local caching of other data like labs, events, bookings)
       await Hive.initFlutter();
       
       // Register adapters
@@ -76,7 +85,7 @@ class _AppInitializerState extends ConsumerState<AppInitializer> {
       await userRepository.init();
       await bookingRepository.init();
       
-      // Seed data if needed
+      // Seed data if needed (only for labs and events, users will be in Supabase)
       await SeedData.seedIfNeeded(
         labRepository: labRepository,
         eventRepository: eventRepository,

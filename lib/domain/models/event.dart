@@ -1,34 +1,14 @@
 import 'package:hive/hive.dart';
 
-part 'event.g.dart';
-
-@HiveType(typeId: 2)
 class Event extends HiveObject {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String labId;
-
-  @HiveField(2)
   final String title;
-
-  @HiveField(3)
   final String description;
-
-  @HiveField(4)
   final DateTime start;
-
-  @HiveField(5)
   final DateTime end;
-
-  @HiveField(6)
   final String createdBy;
-
-  @HiveField(7)
   final DateTime createdAt;
-
-  @HiveField(8)
   final bool isActive;
 
   Event({

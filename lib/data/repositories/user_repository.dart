@@ -13,20 +13,24 @@ class UserRepository {
   }
 
   Future<Result<User>> createUser({
-    required String name,
-    String? studentId,
-    required String role,
+    required String username,
+    required String fullname,
+    required String email,
+    String? mssv,
+    required Role role,
   }) async {
     try {
+      final now = DateTime.now();
       final user = User(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: name,
-        studentId: studentId,
-        role: Role.values.firstWhere(
-          (r) => r.name == role,
-          orElse: () => Role.student,
-        ),
-        createdAt: DateTime.now(),
+        username: username,
+        fullname: fullname,
+        email: email,
+        mssv: mssv,
+        status: 1,
+        createdAt: now,
+        lastUpdatedAt: now,
+        roles: [role],
       );
 
       await _box.put(user.id, user);

@@ -2,47 +2,19 @@ import 'package:hive/hive.dart';
 import '../enums/booking_status.dart';
 import '../enums/repeat_rule.dart';
 
-part 'booking.g.dart';
-
-@HiveType(typeId: 3)
 class Booking extends HiveObject {
-  @HiveField(0)
   final String id;
-
-  @HiveField(1)
   final String? eventId; // nullable when booking ad-hoc
-
-  @HiveField(2)
   final String labId;
-
-  @HiveField(3)
   final String userId;
-
-  @HiveField(4)
   final String title;
-
-  @HiveField(5)
   final DateTime date;
-
-  @HiveField(6)
   final DateTime start;
-
-  @HiveField(7)
   final DateTime end;
-
-  @HiveField(8)
   final RepeatRule repeatRule;
-
-  @HiveField(9)
   final BookingStatus status;
-
-  @HiveField(10)
   final int participants;
-
-  @HiveField(11)
   final DateTime createdAt;
-
-  @HiveField(12)
   final String? notes;
 
   Booking({

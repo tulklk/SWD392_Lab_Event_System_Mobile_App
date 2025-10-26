@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'student_dashboard_page.dart';
 import 'lab_manager_dashboard_page.dart';
 import '../calendar/calendar_screen.dart';
@@ -258,7 +259,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onSelected: (value) async {
                 if (value == 'logout') {
                   final authController = ref.read(authControllerProvider.notifier);
-                  await authController.logout();
+                  final result = await authController.logout();
+                  
+                  if (result.isSuccess && mounted) {
+                    // Show success message
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Logged out successfully'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                    // Redirect to login page
+                    context.go('/login');
+                  }
                 }
               },
               itemBuilder: (context) => [
