@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'auth_controller.dart';
+import '../../domain/enums/role.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -38,11 +39,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     if (result.isSuccess) {
       if (mounted) {
-        // Let router automatically redirect based on user role
+        // Redirect based on user role
         final user = result.data;
         if (user != null) {
-          // Router will auto-redirect based on role (admin → /admin, student → /home)
-          context.go('/');
+          // Redirect directly to appropriate page
+          switch (user.role) {
+            case Role.admin:
+            case Role.labManager:
+              context.go('/admin');
+              break;
+            case Role.student:
+            default:
+              context.go('/home');
+              break;
+          }
         }
       }
     } else {
@@ -72,11 +82,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     if (result.isSuccess) {
       if (mounted) {
-        // Let router automatically redirect based on user role
+        // Redirect based on user role
         final user = result.data;
         if (user != null) {
-          // Router will auto-redirect based on role (admin → /admin, student → /home)
-          context.go('/');
+          // Redirect directly to appropriate page
+          switch (user.role) {
+            case Role.admin:
+            case Role.labManager:
+              context.go('/admin');
+              break;
+            case Role.student:
+            default:
+              context.go('/home');
+              break;
+          }
         }
       }
     } else {
@@ -98,15 +117,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          onPressed: () {
-            context.go('/');
-          },
-          icon: const Icon(
-            Icons.arrow_back,
-            color: Color(0xFF1E293B),
-          ),
-        ),
+        automaticallyImplyLeading: false,
         title: const Text(
           'Login',
           style: TextStyle(

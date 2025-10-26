@@ -7,6 +7,7 @@ import '../features/auth/splash_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/profile/profile_screen.dart';
 import '../features/labs/lab_detail_screen.dart';
 import '../features/bookings/booking_form_screen.dart';
 import '../features/bookings/qr_ticket_screen.dart';
@@ -17,7 +18,7 @@ import '../features/auth/auth_controller.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: '/',
+    initialLocation: '/login',
     redirect: (context, state) {
       print('Router redirect called for path: ${state.uri.path}');
       final authState = ref.read(authControllerProvider);
@@ -28,19 +29,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       );
       print('Current user: ${currentUser?.name} (${currentUser?.role})');
       
-      // If no user is logged in and not on splash, login, or register page, redirect to splash
+      // If no user is logged in and not on login or register page, redirect to login
       if (currentUser == null && 
-          state.uri.path != '/' && 
           state.uri.path != '/login' && 
           state.uri.path != '/register') {
-        print('No user found, redirecting to splash');
-        return '/';
+        print('No user found, redirecting to login');
+        return '/login';
       }
       
-      // If user is logged in and on splash, login, or register page, redirect based on role
+      // If user is logged in and on login or register page, redirect based on role
       if (currentUser != null && 
-          (state.uri.path == '/' || 
-           state.uri.path == '/login' || 
+          (state.uri.path == '/login' || 
            state.uri.path == '/register')) {
         print('User logged in with role: ${currentUser.role}');
         
@@ -82,6 +81,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/home',
         name: 'home',
         builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: '/profile',
+        name: 'profile',
+        builder: (context, state) => const ProfileScreen(),
       ),
       GoRoute(
         path: '/labs/:id',
