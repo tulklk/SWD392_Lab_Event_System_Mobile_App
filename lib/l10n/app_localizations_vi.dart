@@ -27,7 +27,7 @@ class AppLocalizationsVi extends AppLocalizations {
   String get student => 'Sinh Viên';
 
   @override
-  String get labManager => 'Quản Lý Lab';
+  String get lecturer => 'Giảng Viên';
 
   @override
   String get admin => 'Quản Trị Viên';

@@ -15,10 +15,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider);
     final isAdmin = ref.watch(isAdminProvider);
-    final isLabManager = ref.watch(isLabManagerProvider);
+    final isLecturer = ref.watch(isLecturerProvider);
     
     // Check if user has admin privileges
-    if (!isAdmin && !isLabManager) {
+    if (!isAdmin && !isLecturer) {
       return Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         body: Center(
@@ -40,7 +40,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'You need admin or lab manager privileges to access this page.',
+                'You need admin or lecturer privileges to access this page.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: const Color(0xFF64748B),
                 ),

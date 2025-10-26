@@ -137,7 +137,7 @@ class AuthController extends Notifier<AsyncValue<User?>> {
   
   bool get isAdmin => currentUser?.role == Role.admin;
 
-  bool get isLabManager => currentUser?.role == Role.labManager;
+  bool get isLecturer => currentUser?.role == Role.lecturer;
 
   bool get isStudent => currentUser?.role == Role.student;
 }
@@ -163,9 +163,9 @@ final isAdminProvider = Provider<bool>((ref) {
   return user?.role == Role.admin;
 });
 
-final isLabManagerProvider = Provider<bool>((ref) {
+final isLecturerProvider = Provider<bool>((ref) {
   final user = ref.watch(currentUserProvider);
-  return user?.role == Role.labManager;
+  return user?.role == Role.lecturer;
 });
 
 final isStudentProvider = Provider<bool>((ref) {

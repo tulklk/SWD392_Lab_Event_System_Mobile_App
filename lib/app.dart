@@ -6,7 +6,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'core/l10n/l10n.dart';
 import 'core/config/supabase_config.dart';
-import 'data/local/hive_adapters.dart';
 import 'data/seed/seed_data.dart';
 import 'data/repositories/lab_repository.dart';
 import 'data/repositories/event_repository.dart';
@@ -70,9 +69,6 @@ class _AppInitializerState extends ConsumerState<AppInitializer> {
       
       // Initialize Hive (for local caching of other data like labs, events, bookings)
       await Hive.initFlutter();
-      
-      // Register adapters
-      HiveAdapters.registerAdapters();
       
       // Initialize repositories
       final labRepository = LabRepository();

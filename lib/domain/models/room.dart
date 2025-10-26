@@ -1,62 +1,62 @@
-/// Lab model matching tbl_labs schema
-class Lab {
+/// Room model matching tbl_rooms schema
+class Room {
   final String id;
   final String name;
   final String? description;
   final String? location;
+  final int capacity;
+  final int status; // 0: inactive, 1: active
+  final String? imageUrl;
   final DateTime createdAt;
   final DateTime lastUpdatedAt;
-  final int capacity;
-  final int status; // 0: inactive, 1: active, 2: maintenance
-  final String roomId;
 
-  Lab({
+  Room({
     required this.id,
     required this.name,
     this.description,
     this.location,
-    required this.createdAt,
-    required this.lastUpdatedAt,
     required this.capacity,
     this.status = 1,
-    required this.roomId,
+    this.imageUrl,
+    required this.createdAt,
+    required this.lastUpdatedAt,
   });
 
-  Lab copyWith({
+  Room copyWith({
     String? id,
     String? name,
     String? description,
     String? location,
-    DateTime? createdAt,
-    DateTime? lastUpdatedAt,
     int? capacity,
     int? status,
-    String? roomId,
+    String? imageUrl,
+    DateTime? createdAt,
+    DateTime? lastUpdatedAt,
   }) {
-    return Lab(
+    return Room(
       id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
       location: location ?? this.location,
-      createdAt: createdAt ?? this.createdAt,
-      lastUpdatedAt: lastUpdatedAt ?? this.lastUpdatedAt,
       capacity: capacity ?? this.capacity,
       status: status ?? this.status,
-      roomId: roomId ?? this.roomId,
+      imageUrl: imageUrl ?? this.imageUrl,
+      createdAt: createdAt ?? this.createdAt,
+      lastUpdatedAt: lastUpdatedAt ?? this.lastUpdatedAt,
     );
   }
 
-  factory Lab.fromJson(Map<String, dynamic> json) {
-    return Lab(
+  factory Room.fromJson(Map<String, dynamic> json) {
+    return Room(
       id: json['Id'] as String,
       name: json['Name'] as String,
       description: json['Description'] as String?,
       location: json['Location'] as String?,
-      createdAt: DateTime.parse(json['CreatedAt'] as String),
-      lastUpdatedAt: DateTime.parse(json['LastUpdatedAt'] as String),
       capacity: json['Capacity'] as int,
       status: json['Status'] as int? ?? 1,
-      roomId: json['RoomId'] as String,
+      imageUrl: json['ImageUrl'] as String?,
+      createdAt: DateTime.parse(json['CreatedAt'] as String),
+      lastUpdatedAt: DateTime.parse(json['LastUpdatedAt'] as String),
     );
   }
 
@@ -66,28 +66,28 @@ class Lab {
       'Name': name,
       'Description': description,
       'Location': location,
-      'CreatedAt': createdAt.toIso8601String(),
-      'LastUpdatedAt': lastUpdatedAt.toIso8601String(),
       'Capacity': capacity,
       'Status': status,
-      'RoomId': roomId,
+      'ImageUrl': imageUrl,
+      'CreatedAt': createdAt.toIso8601String(),
+      'LastUpdatedAt': lastUpdatedAt.toIso8601String(),
     };
   }
 
   bool get isActive => status == 1;
-  bool get isInMaintenance => status == 2;
 
   @override
   String toString() {
-    return 'Lab(id: $id, name: $name, location: $location, capacity: $capacity, status: $status)';
+    return 'Room(id: $id, name: $name, location: $location, capacity: $capacity, status: $status)';
   }
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is Lab && other.id == id;
+    return other is Room && other.id == id;
   }
 
   @override
   int get hashCode => id.hashCode;
 }
+

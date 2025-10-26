@@ -63,7 +63,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           // Redirect directly to appropriate page
           switch (user.role) {
             case Role.admin:
-            case Role.labManager:
+            case Role.lecturer:
               context.go('/admin');
               break;
             case Role.student:
@@ -451,13 +451,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                     const SizedBox(height: 12),
                     
-                    // Lab Manager
+                    // Lecturer
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: _selectedRole == Role.labManager 
+                          color: _selectedRole == Role.lecturer 
                               ? const Color(0xFFFF6600) 
                               : const Color(0xFFE2E8F0),
                           width: 2,
@@ -465,14 +465,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ),
                       child: RadioListTile<Role>(
                         title: const Text(
-                          'Lab Manager',
+                          'Lecturer',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w500,
                             color: Color(0xFF1E293B),
                           ),
                         ),
-                        value: Role.labManager,
+                        value: Role.lecturer,
                         groupValue: _selectedRole,
                         onChanged: (Role? value) {
                           setState(() {

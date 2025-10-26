@@ -5,7 +5,7 @@
   "studentId": "Mã Sinh Viên",
   "role": "Vai Trò",
   "student": "Sinh Viên",
-  "labManager": "Quản Lý Lab",
+  "lecturer": "Giảng Viên",
   "admin": "Quản Trị Viên",
   "calendar": "Lịch",
   "labs": "Phòng Lab",

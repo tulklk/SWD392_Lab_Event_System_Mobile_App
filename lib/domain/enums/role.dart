@@ -1,6 +1,6 @@
 enum Role {
   student('Student'),
-  labManager('Lab Manager'),
+  lecturer('Lecturer'),
   admin('Admin');
 
   const Role(this.displayName);

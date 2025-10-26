@@ -40,18 +40,21 @@ class SeedData {
         'location': 'Building A, Floor 3, Room 301',
         'capacity': 30,
         'description': 'Advanced AI and Machine Learning laboratory with high-performance computing resources.',
+        'roomId': 'room_1',
       },
       {
         'name': 'Lab B - Robotics & IoT',
         'location': 'Building B, Floor 2, Room 205',
         'capacity': 25,
         'description': 'Robotics and Internet of Things laboratory equipped with sensors and robotic kits.',
+        'roomId': 'room_2',
       },
       {
         'name': 'Lab C - Software Development',
         'location': 'Building C, Floor 1, Room 101',
         'capacity': 40,
         'description': 'Software development laboratory with modern development tools and collaborative spaces.',
+        'roomId': 'room_3',
       },
     ];
 
@@ -61,6 +64,7 @@ class SeedData {
         location: labData['location'] as String,
         capacity: labData['capacity'] as int,
         description: labData['description'] as String,
+        roomId: labData['roomId'] as String,
       );
     }
   }
@@ -69,12 +73,16 @@ class SeedData {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     
-    // Get labs for events - we'll use hardcoded lab IDs for now
-    final labIds = ['lab_1', 'lab_2', 'lab_3'];
+    // Event locations
+    final locations = [
+      'Building A, Floor 3, Room 301',
+      'Building B, Floor 2, Room 205',
+      'Building C, Floor 1, Room 101',
+    ];
     
     final events = [
       {
-        'labId': labIds[0],
+        'location': locations[0],
         'title': 'AI Workshop: Introduction to Neural Networks',
         'description': 'Learn the fundamentals of neural networks and deep learning.',
         'start': today.add(const Duration(hours: 9)),
@@ -82,7 +90,7 @@ class SeedData {
         'createdBy': 'admin',
       },
       {
-        'labId': labIds[1],
+        'location': locations[1],
         'title': 'Robotics Demo: Arduino Programming',
         'description': 'Hands-on session on Arduino programming for robotics projects.',
         'start': today.add(const Duration(hours: 14)),
@@ -90,7 +98,7 @@ class SeedData {
         'createdBy': 'admin',
       },
       {
-        'labId': labIds[2],
+        'location': locations[2],
         'title': 'Flutter Development Workshop',
         'description': 'Build mobile applications with Flutter framework.',
         'start': today.add(const Duration(days: 1, hours: 10)),
@@ -98,7 +106,7 @@ class SeedData {
         'createdBy': 'admin',
       },
       {
-        'labId': labIds[0],
+        'location': locations[0],
         'title': 'Machine Learning Project Presentation',
         'description': 'Students present their ML projects and research findings.',
         'start': today.add(const Duration(days: 2, hours: 15)),
@@ -106,7 +114,7 @@ class SeedData {
         'createdBy': 'admin',
       },
       {
-        'labId': labIds[1],
+        'location': locations[1],
         'title': 'IoT Sensors Workshop',
         'description': 'Learn about various IoT sensors and their applications.',
         'start': today.add(const Duration(days: 3, hours: 9)),
@@ -117,12 +125,12 @@ class SeedData {
 
     for (final eventData in events) {
       await eventRepository.createEvent(
-        labId: eventData['labId'] as String,
         title: eventData['title'] as String,
         description: eventData['description'] as String,
         start: eventData['start'] as DateTime,
         end: eventData['end'] as DateTime,
         createdBy: eventData['createdBy'] as String,
+        location: eventData['location'] as String,
       );
     }
   }
