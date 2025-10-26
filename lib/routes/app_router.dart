@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/utils/result.dart';
 import '../domain/enums/role.dart';
+import '../domain/models/booking.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
 import '../features/home/home_screen.dart';
@@ -95,7 +96,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
           return BookingFormScreen(
-            labId: extra?['labId'],
+            roomId: extra?['roomId'],
             selectedDate: extra?['selectedDate'],
             selectedStartTime: extra?['selectedStartTime'],
             selectedEndTime: extra?['selectedEndTime'],
@@ -103,11 +104,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: '/bookings/:id/qr',
+        path: '/qr-ticket',
         name: 'qr-ticket',
         builder: (context, state) {
-          final bookingId = state.pathParameters['id']!;
-          return QRTicketScreen(bookingId: bookingId);
+          final booking = state.extra as Booking;
+          return QRTicketScreen(booking: booking);
         },
       ),
       GoRoute(
