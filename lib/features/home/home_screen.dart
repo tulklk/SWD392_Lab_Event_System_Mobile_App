@@ -7,6 +7,7 @@ import '../calendar/calendar_screen.dart';
 import '../labs/labs_screen.dart';
 import '../bookings/my_bookings_screen.dart';
 import '../admin/admin_dashboard_screen.dart';
+import '../profile/profile_screen.dart';
 import '../../domain/enums/role.dart';
 import '../auth/auth_controller.dart';
 
@@ -257,7 +258,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             child: PopupMenuButton<String>(
               onSelected: (value) async {
-                if (value == 'logout') {
+                print('PopupMenu selected: $value'); // Debug log
+                if (value == 'profile') {
+                  // Navigate to profile screen
+                  print('Navigating to profile...'); // Debug log
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const ProfileScreen(),
+                    ),
+                  );
+                } else if (value == 'logout') {
                   final authController = ref.read(authControllerProvider.notifier);
                   final result = await authController.logout();
                   
@@ -276,8 +286,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 }
               },
               itemBuilder: (context) => [
-                PopupMenuItem(
+                PopupMenuItem<String>(
                   value: 'profile',
+                  enabled: true,
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     child: Row(
@@ -326,6 +337,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               ),
                             ],
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ],
                     ),
