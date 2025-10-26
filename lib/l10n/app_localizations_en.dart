@@ -27,7 +27,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get student => 'Student';
 
   @override
-  String get labManager => 'Lab Manager';
+  String get lecturer => 'Lecturer';
 
   @override
   String get admin => 'Admin';

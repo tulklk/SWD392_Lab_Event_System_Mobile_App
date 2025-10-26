@@ -24,7 +24,7 @@ class AppLocalizations {
   String get studentId => 'Student ID';
   String get role => 'Role';
   String get student => 'Student';
-  String get labManager => 'Lab Manager';
+  String get lecturer => 'Lecturer';
   String get admin => 'Admin';
   String get calendar => 'Calendar';
   String get labs => 'Labs';

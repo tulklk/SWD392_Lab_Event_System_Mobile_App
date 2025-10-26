@@ -14,44 +14,27 @@ class BookingRepository {
 
   Future<Result<Booking>> createBooking({
     String? eventId,
-    required String labId,
+    required String roomId,
     required String userId,
-    required String title,
-    required DateTime date,
-    required DateTime start,
-    required DateTime end,
-    required String repeatRule,
-    required int participants,
+    required String purpose,
+    required DateTime startTime,
+    required DateTime endTime,
     String? notes,
   }) async {
     try {
-      // Check for conflicts
-      final conflictResult = await hasConflict(labId, date, start, end);
-      if (conflictResult.isFailure) {
-        return Failure(conflictResult.error!);
-      }
-      
-      if (conflictResult.data == true) {
-        return const Failure('Time conflict detected');
-      }
-
+      final now = DateTime.now();
       final booking = Booking(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         eventId: eventId,
-        labId: labId,
+        roomId: roomId,
         userId: userId,
-        title: title,
-        date: date,
-        start: start,
-        end: end,
-        repeatRule: RepeatRule.values.firstWhere(
-          (r) => r.name == repeatRule,
-          orElse: () => RepeatRule.none,
-        ),
-        status: BookingStatus.approved, // Mock: auto-approve
-        participants: participants,
-        createdAt: DateTime.now(),
+        purpose: purpose,
+        startTime: startTime,
+        endTime: endTime,
+        status: 0, // pending
         notes: notes,
+        createdAt: now,
+        lastUpdatedAt: now,
       );
 
       await _box.put(booking.id, booking);
@@ -160,7 +143,7 @@ class BookingRepository {
       final booking = _box.get(id);
       if (booking != null) {
         final updatedBooking = booking.copyWith(
-          status: BookingStatus.cancelled,
+          status: 3, // cancelled
         );
         await _box.put(id, updatedBooking);
       }

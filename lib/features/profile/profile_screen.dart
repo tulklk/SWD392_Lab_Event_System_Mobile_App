@@ -327,7 +327,7 @@ class ProfileScreen extends ConsumerWidget {
     switch (role) {
       case Role.admin:
         return const Color(0xFFDC2626); // Red
-      case Role.labManager:
+      case Role.lecturer:
         return const Color(0xFF2563EB); // Blue
       case Role.student:
         return const Color(0xFF16A34A); // Green
@@ -338,7 +338,7 @@ class ProfileScreen extends ConsumerWidget {
     switch (role) {
       case Role.admin:
         return Icons.admin_panel_settings;
-      case Role.labManager:
+      case Role.lecturer:
         return Icons.manage_accounts;
       case Role.student:
         return Icons.school;

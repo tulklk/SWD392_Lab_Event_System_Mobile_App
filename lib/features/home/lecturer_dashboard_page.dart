@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../auth/auth_controller.dart';
 
-class LabManagerDashboardPage extends ConsumerWidget {
-  const LabManagerDashboardPage({super.key});
+class LecturerDashboardPage extends ConsumerWidget {
+  const LecturerDashboardPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -54,14 +54,14 @@ class LabManagerDashboardPage extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Lab Manager Dashboard',
+                              'Lecturer Dashboard',
                               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             Text(
-                              'Welcome, ${currentUser?.name ?? 'Lab Manager'}',
+                              'Welcome, ${currentUser?.name ?? 'Lecturer'}',
                               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                 color: Colors.white.withValues(alpha: 0.9),
                               ),
@@ -108,7 +108,7 @@ class LabManagerDashboardPage extends ConsumerWidget {
                   child: _buildStatCard(
                     'This Week',
                     '45',
-                    Icons.calendar_view_week_rounded, // <— sửa icon hợp lệ
+                    Icons.calendar_view_week_rounded,
                     const Color(0xFF8B5CF6),
                   ),
                 ),
@@ -369,3 +369,4 @@ class LabManagerDashboardPage extends ConsumerWidget {
     );
   }
 }
+
