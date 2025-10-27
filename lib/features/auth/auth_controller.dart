@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/models/user.dart';
 import '../../domain/enums/role.dart';
@@ -16,15 +17,27 @@ class AuthController extends Notifier<AsyncValue<User?>> {
 
   Future<void> _loadCurrentUser() async {
     try {
+      debugPrint('🔍 AuthController: Loading current user...');
       state = const AsyncValue.loading();
+      
+      // Small delay to ensure Supabase has time to restore session
+      await Future.delayed(const Duration(milliseconds: 100));
+      
       final result = await _authService.getCurrentUserProfile();
       
       if (result.isSuccess) {
+        if (result.data != null) {
+          debugPrint('✅ AuthController: User loaded - ${result.data!.email} (${result.data!.role.name})');
+        } else {
+          debugPrint('ℹ️ AuthController: No user session found');
+        }
         state = AsyncValue.data(result.data);
       } else {
+        debugPrint('❌ AuthController: Failed to load user - ${result.error}');
         state = const AsyncValue.data(null);
       }
     } catch (error, stackTrace) {
+      debugPrint('❌ AuthController: Error loading user - $error');
       state = AsyncValue.error(error, stackTrace);
     }
   }

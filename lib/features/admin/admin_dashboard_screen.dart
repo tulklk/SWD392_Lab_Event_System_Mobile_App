@@ -61,8 +61,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         centerTitle: true,
         title: const Text(
           'Admin Dashboard',
-                            style: TextStyle(
-                              fontSize: 20,
+          style: TextStyle(
+            fontSize: 20,
             fontWeight: FontWeight.w700,
             color: Color(0xFF1E293B),
           ),
@@ -74,9 +74,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           icon: const Icon(
             Icons.arrow_back,
             color: Color(0xFF1E293B),
-                                ),
-                              ),
-                            ),
+          ),
+        ),
+      ),
       body: DefaultTabController(
         length: 3,
                     child: Column(

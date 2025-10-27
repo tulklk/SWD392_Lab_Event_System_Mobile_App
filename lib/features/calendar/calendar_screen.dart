@@ -93,26 +93,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             color: Color(0xFF1E293B),
           ),
         ),
-        leading: IconButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
-          icon: const Icon(
-            Icons.arrow_back,
-            color: Color(0xFF1E293B),
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: () {
-              // Add event
-            },
-            icon: const Icon(
-              Icons.add,
-              color: Color(0xFF1E293B),
-            ),
-          ),
-        ],
       ),
       body: Column(
         children: [

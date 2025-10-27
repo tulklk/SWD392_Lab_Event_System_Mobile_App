@@ -11,6 +11,7 @@ import 'data/repositories/lab_repository.dart';
 import 'data/repositories/event_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'data/repositories/booking_repository.dart';
+import 'features/auth/auth_controller.dart';
 import 'routes/app_router.dart';
 
 class LabSystemApp extends ConsumerWidget {
@@ -60,12 +61,48 @@ class _AppInitializerState extends ConsumerState<AppInitializer> {
 
   Future<void> _initializeApp() async {
     try {
-      // Initialize Supabase
+      // Initialize Supabase with auth persistence (session persistence is enabled by default)
       await Supabase.initialize(
         url: SupabaseConfig.supabaseUrl,
         anonKey: SupabaseConfig.supabaseAnonKey,
+        authOptions: const FlutterAuthClientOptions(
+          authFlowType: AuthFlowType.pkce,
+          autoRefreshToken: true,
+        ),
       );
-      debugPrint('Supabase initialized successfully');
+      debugPrint('✅ Supabase initialized successfully');
+      
+      // Setup auth state listener - CRITICAL for session persistence!
+      // This listens to auth changes and updates the app state
+      Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+        final session = data.session;
+        final event = data.event;
+        
+        debugPrint('🔔 Auth state changed: $event');
+        if (session != null) {
+          debugPrint('📱 Session active: ${session.user.email}');
+        } else {
+          debugPrint('📱 No active session');
+        }
+        
+        // Refresh auth controller when auth state changes
+        if (mounted) {
+          ref.invalidate(authControllerProvider);
+        }
+      });
+      
+      // Wait longer for Supabase to recover session from local storage
+      // Google Sign In needs more time to restore session
+      await Future.delayed(const Duration(milliseconds: 1000));
+      
+      // Check if we have a session
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        debugPrint('✅ Session recovered: User ${session.user.email}');
+        debugPrint('📅 Session expires at: ${session.expiresAt}');
+      } else {
+        debugPrint('ℹ️ No existing session found');
+      }
       
       // Initialize Hive (for local caching of other data like labs, events, bookings)
       await Hive.initFlutter();
