@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../auth/auth_controller.dart';
 import '../../domain/models/event.dart';
 import '../../data/repositories/event_repository.dart';
 
 class StudentDashboardPage extends ConsumerStatefulWidget {
-  const StudentDashboardPage({super.key});
+  final Function(int)? onTabChange;
+  
+  const StudentDashboardPage({
+    super.key,
+    this.onTabChange,
+  });
 
   @override
   ConsumerState<StudentDashboardPage> createState() => _StudentDashboardPageState();
@@ -165,7 +171,10 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage> {
                     iconColor: const Color(0xFFFF6600),
                     iconBackgroundColor: const Color(0xFFFF6600).withOpacity(0.1),
                     title: 'Book Lab',
-                    onTap: () {},
+                    onTap: () {
+                      // Navigate to booking form
+                      context.push('/bookings/new');
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -176,7 +185,10 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage> {
                     iconColor: const Color(0xFF1A73E8),
                     iconBackgroundColor: const Color(0xFF1A73E8).withOpacity(0.1),
                     title: 'View Labs',
-                    onTap: () {},
+                    onTap: () {
+                      // Switch to Labs tab (index 2 for student)
+                      widget.onTabChange?.call(2);
+                    },
                   ),
                 ),
               ],
@@ -191,7 +203,10 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage> {
                     iconColor: const Color(0xFF10B981),
                     iconBackgroundColor: const Color(0xFF10B981).withOpacity(0.1),
                     title: 'My Bookings',
-                    onTap: () {},
+                    onTap: () {
+                      // Switch to My Bookings tab (index 3 for student)
+                      widget.onTabChange?.call(3);
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),

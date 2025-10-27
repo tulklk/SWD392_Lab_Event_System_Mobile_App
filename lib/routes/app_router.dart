@@ -1,11 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/utils/result.dart';
 import '../domain/enums/role.dart';
 import '../domain/models/booking.dart';
+import '../features/auth/splash_screen.dart';
 import '../features/auth/login_screen.dart';
-import '../features/auth/register_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/labs/lab_detail_screen.dart';
@@ -17,60 +18,97 @@ import '../features/admin/manage_events_screen.dart';
 import '../features/auth/auth_controller.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
+  // Watch auth state to trigger router refresh when auth changes
+  ref.watch(authControllerProvider);
+  
   return GoRouter(
-    initialLocation: '/login',
+    initialLocation: '/splash',
     redirect: (context, state) {
-      print('Router redirect called for path: ${state.uri.path}');
+      debugPrint('🔄 Router: Current path = ${state.uri.path}');
       final authState = ref.read(authControllerProvider);
+      
+      // Check if we're still loading auth state
+      final isLoading = authState.isLoading;
       final currentUser = authState.when(
         data: (user) => user,
         loading: () => null,
         error: (_, __) => null,
       );
-      print('Current user: ${currentUser?.name} (${currentUser?.role})');
       
-      // If no user is logged in and not on login or register page, redirect to login
-      if (currentUser == null && 
-          state.uri.path != '/login' && 
-          state.uri.path != '/register') {
-        print('No user found, redirecting to login');
-        return '/login';
+      debugPrint('🔄 Router: Auth loading = $isLoading, User = ${currentUser?.email ?? "none"} (${currentUser?.role.name ?? "N/A"})');
+      
+      final isOnSplash = state.uri.path == '/splash';
+      final isOnAuth = state.uri.path == '/login';
+      
+      // If still loading and not on splash, go to splash
+      if (isLoading && !isOnSplash) {
+        debugPrint('⏳ Router: Still loading auth, showing splash');
+        return '/splash';
       }
       
-      // If user is logged in and on login or register page, redirect based on role
-      if (currentUser != null && 
-          (state.uri.path == '/login' || 
-           state.uri.path == '/register')) {
-        print('User logged in with role: ${currentUser.role}');
+      // If done loading
+      if (!isLoading) {
+        // If on splash, redirect based on auth state
+        if (isOnSplash) {
+          if (currentUser != null) {
+            debugPrint('✅ Router: User logged in (${currentUser.email}), redirecting from splash');
+            // Redirect based on user role
+            switch (currentUser.role) {
+              case Role.admin:
+                debugPrint('➡️ Router: Redirecting to /admin (Admin)');
+                return '/admin';
+              case Role.lecturer:
+                debugPrint('➡️ Router: Redirecting to /admin (Lecturer)');
+                return '/admin';
+              case Role.student:
+              default:
+                debugPrint('➡️ Router: Redirecting to /home (Student)');
+                return '/home';
+            }
+          } else {
+            debugPrint('ℹ️ Router: No user, redirecting to login');
+            return '/login';
+          }
+        }
         
-        // Redirect based on user role
-        switch (currentUser.role) {
-          case Role.admin:
-            print('Redirecting admin to admin dashboard');
-            return '/admin';
-          case Role.lecturer:
-            print('Redirecting lecturer to admin dashboard');
-            return '/admin';
-          case Role.student:
-          default:
-            print('Redirecting student to home');
-            return '/home';
+        // If no user is logged in and not on auth pages, redirect to login
+        if (currentUser == null && !isOnAuth) {
+          debugPrint('🔒 Router: No user and not on auth page, redirecting to login');
+          return '/login';
+        }
+        
+        // If user is logged in and on auth pages, redirect based on role
+        if (currentUser != null && isOnAuth) {
+          debugPrint('✅ Router: User already logged in on auth page, redirecting');
+          // Redirect based on user role
+          switch (currentUser.role) {
+            case Role.admin:
+              debugPrint('➡️ Router: Redirecting to /admin (Admin)');
+              return '/admin';
+            case Role.lecturer:
+              debugPrint('➡️ Router: Redirecting to /admin (Lecturer)');
+              return '/admin';
+            case Role.student:
+            default:
+              debugPrint('➡️ Router: Redirecting to /home (Student)');
+              return '/home';
+          }
         }
       }
       
-      print('No redirect needed');
+      debugPrint('✓ Router: No redirect needed');
       return null;
     },
     routes: [
       GoRoute(
+        path: '/splash',
+        name: 'splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
         path: '/login',
         name: 'login',
         builder: (context, state) => const LoginScreen(),
-      ),
-      GoRoute(
-        path: '/register',
-        name: 'register',
-        builder: (context, state) => const RegisterScreen(),
       ),
       GoRoute(
         path: '/home',

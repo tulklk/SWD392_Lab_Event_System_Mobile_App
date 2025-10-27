@@ -16,13 +16,10 @@ class MyBookingsScreen extends ConsumerStatefulWidget {
 }
 
 class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> 
-    with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
+    with WidgetsBindingObserver {
   List<Booking> _bookings = [];
-  bool _isLoading = true;
-  bool _needsRefresh = false;
-
-  @override
-  bool get wantKeepAlive => true;
+  bool _isLoading = false;
+  DateTime? _lastRefreshTime;
 
   @override
   void initState() {
@@ -40,47 +37,53 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Refresh when app resumes
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      debugPrint('📱 App resumed, refreshing bookings...');
       _loadBookings();
     }
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Refresh when screen becomes visible again
-    if (_needsRefresh) {
-      _needsRefresh = false;
-      Future.microtask(() => _loadBookings());
-    }
-  }
-
   Future<void> _loadBookings() async {
-    setState(() => _isLoading = true);
+    // Prevent duplicate calls
+    if (_isLoading) {
+      debugPrint('⏭️ Already loading, skipping...');
+      return;
+    }
+    
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _lastRefreshTime = DateTime.now();
+      });
+    }
     
     final currentUser = ref.read(currentUserProvider);
     if (currentUser == null) {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
       return;
     }
 
+    debugPrint('🔄 Loading bookings for user ${currentUser.id}...');
     final bookingRepository = BookingRepository();
     
     final result = await bookingRepository.getBookingsForUser(currentUser.id);
-    if (result.isSuccess && mounted) {
-      debugPrint('📚 Loaded ${result.data!.length} bookings for user ${currentUser.id}');
+    
+    if (!mounted) return;
+    
+    if (result.isSuccess) {
+      debugPrint('📚 Loaded ${result.data!.length} bookings');
       setState(() {
         _bookings = result.data!;
         _isLoading = false;
       });
     } else {
       debugPrint('❌ Failed to load bookings: ${result.error}');
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.error ?? 'Failed to load bookings')),
-        );
-      }
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.error ?? 'Failed to load bookings')),
+      );
     }
   }
 
@@ -109,7 +112,6 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -213,16 +215,15 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
             const SizedBox(height: 8),
             TextButton.icon(
               onPressed: () async {
-                // Set flag before navigation
-                _needsRefresh = true;
-                // Navigate and wait for result
-                final result = await context.push('/labs');
-                // If booking was successful, refresh immediately
-                if (result == true && mounted) {
-                  await _loadBookings();
-                } else if (mounted) {
-                  // Even if result is null, still refresh when we come back
-                  await _loadBookings();
+                // Navigate to Labs/Booking
+                await context.push('/labs');
+                // Force refresh when coming back
+                if (mounted) {
+                  debugPrint('↩️ User returned from Labs, refreshing...');
+                  await Future.delayed(const Duration(milliseconds: 500));
+                  if (mounted) {
+                    await _loadBookings();
+                  }
                 }
               },
               icon: const Icon(Icons.add),

@@ -126,19 +126,27 @@ class AuthService {
   /// Sign in with Google
   Future<Result<app_user.User>> signInWithGoogle() async {
     try {
+      debugPrint('🔐 Starting Google Sign In...');
+      
       // 1. Sign in with Google
       final googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
+        debugPrint('❌ Google sign in cancelled by user');
         return Failure('Google sign in was cancelled');
       }
 
+      debugPrint('✅ Google user obtained: ${googleUser.email}');
+      
       // Validate email domain - Only allow @fpt.edu.vn
       final email = googleUser.email;
       if (!email.toLowerCase().endsWith('@fpt.edu.vn')) {
+        debugPrint('❌ Invalid email domain: $email');
         // Sign out from Google and reject login
         await _googleSignIn.signOut();
         return Failure('Only FPT University email addresses (@fpt.edu.vn) are allowed to sign in.');
       }
+
+      debugPrint('✅ Email domain validated: $email');
 
       // 2. Get Google auth
       final googleAuth = await googleUser.authentication;
@@ -146,10 +154,14 @@ class AuthService {
       final idToken = googleAuth.idToken;
 
       if (accessToken == null || idToken == null) {
+        debugPrint('❌ Failed to get Google auth tokens');
         return Failure('Failed to get Google credentials');
       }
 
+      debugPrint('✅ Google auth tokens obtained');
+
       // 3. Sign in to Supabase with Google credentials
+      debugPrint('🔐 Signing in to Supabase with Google credentials...');
       final response = await _supabase.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
@@ -157,9 +169,14 @@ class AuthService {
       );
 
       if (response.user == null) {
+        debugPrint('❌ Supabase authentication failed');
         return Failure('Failed to authenticate with Google');
       }
 
+      debugPrint('✅ Supabase authentication successful');
+      debugPrint('📱 Session created for: ${response.user!.email}');
+      debugPrint('📅 Session expires at: ${response.session?.expiresAt}');
+      
       final userId = response.user!.id;
       // Email already validated above
 
@@ -272,13 +289,18 @@ class AuthService {
   /// Get current user profile
   Future<Result<app_user.User?>> getCurrentUserProfile() async {
     try {
+      debugPrint('🔐 AuthService: Checking current session...');
       final session = _supabase.auth.currentSession;
+      
       if (session == null || session.user == null) {
-        return Success(null);
+        debugPrint('ℹ️ AuthService: No active session');
+        return const Success(null);
       }
 
+      debugPrint('✅ AuthService: Active session found for ${session.user.email}');
       return await _getUserById(session.user.id);
     } catch (e) {
+      debugPrint('❌ AuthService: Error getting profile - $e');
       return Failure('Failed to get user profile: $e');
     }
   }

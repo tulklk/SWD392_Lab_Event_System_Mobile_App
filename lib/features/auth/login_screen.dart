@@ -346,75 +346,76 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 // Google Sign In Button
                 SizedBox(
                   width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _isGoogleLoading ? null : _handleGoogleSignIn,
-                    icon: _isGoogleLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Color(0xFFFF6600),
-                            ),
-                          )
-                        : Image.asset(
-                            'assets/images/google_logo.png',
-                            width: 24,
-                            height: 24,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const Icon(
-                                Icons.login,
-                                color: Color(0xFFFF6600),
-                                size: 24,
-                              );
-                            },
+                  child: _isGoogleLoading
+                      ? Container(
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
                           ),
-                    label: Text(
-                      _isGoogleLoading ? 'Signing in...' : 'Continue with Google',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(color: Color(0xFFE2E8F0), width: 2),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      backgroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(height: 24),
-                
-                // Register link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      'Don\'t have an account? ',
-                      style: TextStyle(
-                        color: Color(0xFF64748B),
-                        fontSize: 14,
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        context.go('/register');
-                      },
-                      child: const Text(
-                        'Sign Up',
-                        style: TextStyle(
-                          color: Color(0xFFFF6600),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                          child: const Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFFFF6600),
+                              ),
+                            ),
+                          ),
+                        )
+                      : InkWell(
+                          onTap: _handleGoogleSignIn,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            height: 56,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.asset(
+                                'assets/images/google_signin_button.png',
+                                fit: BoxFit.fill,
+                                errorBuilder: (context, error, stackTrace) {
+                                  // Fallback if image not found
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: const Color(0xFFE2E8F0), width: 2),
+                                    ),
+                                    child: const Center(
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.login, color: Color(0xFFFF6600)),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'Continue with Google',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF1E293B),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
                 ),
                 
                 const SizedBox(height: 20),

@@ -35,7 +35,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (isStudent) {
       // Student: Only Home, Calendar, Labs, and My Bookings
       screens = [
-        StudentDashboardPage(),
+        StudentDashboardPage(
+          onTabChange: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+        ),
         const CalendarScreen(),
         const LabsScreen(),
         const MyBookingsScreen(),
@@ -65,7 +71,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     } else if (isLecturer) {
       // Lecturer: Home, Calendar, Labs, Bookings Management, and Lab Management
       screens = [
-        const LecturerDashboardPage(),
+        LecturerDashboardPage(
+          onTabChange: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+        ),
         const CalendarScreen(),
         const LabsScreen(),
         const MyBookingsScreen(),
@@ -156,34 +168,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Container(
               width: 40,
               height: 40,
+              padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Theme.of(context).colorScheme.primary,
-                    Theme.of(context).colorScheme.secondary,
-                    Theme.of(context).colorScheme.tertiary,
-                  ],
-                ),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
-              child: Center(
-                child: Text(
-                  'FL',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                    letterSpacing: 0.5,
-                  ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset(
+                  'assets/images/fpt_logo.png',
+                  fit: BoxFit.contain,
                 ),
               ),
             ),
@@ -285,6 +286,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   }
                 }
               },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFFFF6600), // Orange primary
+                      Color(0xFFFF8533), // Orange lighter
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
+                  child: Text(
+                    currentUser?.name[0].toUpperCase() ?? 'U',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
               itemBuilder: (context) => [
                 PopupMenuItem<String>(
                   value: 'profile',
@@ -297,12 +323,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
+                            gradient: const LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                               colors: [
-                                Theme.of(context).colorScheme.primary,
-                                Theme.of(context).colorScheme.secondary,
+                                Color(0xFFFF6600), // Orange primary
+                                Color(0xFFFF8533), // Orange lighter
                               ],
                             ),
                             borderRadius: BorderRadius.circular(10),
@@ -310,7 +336,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           child: Center(
                             child: Text(
                               currentUser?.name[0].toUpperCase() ?? 'U',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 16,

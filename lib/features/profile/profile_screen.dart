@@ -68,19 +68,19 @@ class ProfileScreen extends ConsumerWidget {
               width: 120,
               height: 120,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Theme.of(context).colorScheme.primary,
-                    Theme.of(context).colorScheme.secondary,
-                    Theme.of(context).colorScheme.tertiary,
+                    Color(0xFFFF6600), // Orange primary
+                    Color(0xFFFF8533), // Orange lighter
+                    Color(0xFFFFA366), // Orange lightest
                   ],
                 ),
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                    color: const Color(0xFFFF6600).withOpacity(0.3),
                     blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),

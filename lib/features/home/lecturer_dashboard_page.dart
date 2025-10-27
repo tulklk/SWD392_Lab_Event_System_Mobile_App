@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../auth/auth_controller.dart';
 
 class LecturerDashboardPage extends ConsumerWidget {
-  const LecturerDashboardPage({super.key});
+  final Function(int)? onTabChange;
+  
+  const LecturerDashboardPage({
+    super.key,
+    this.onTabChange,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -145,7 +151,8 @@ class LecturerDashboardPage extends ConsumerWidget {
                     Icons.settings_rounded,
                     const Color(0xFF1A73E8),
                         () {
-                      // Navigate to lab management
+                      // Navigate to lab management (Manage tab - index 4 for lecturer)
+                      onTabChange?.call(4);
                     },
                   ),
                 ),
@@ -157,7 +164,8 @@ class LecturerDashboardPage extends ConsumerWidget {
                     Icons.fact_check_rounded,
                     const Color(0xFFFF6600),
                         () {
-                      // Navigate to booking management
+                      // Navigate to bookings tab (index 3 for lecturer)
+                      onTabChange?.call(3);
                     },
                   ),
                 ),
