@@ -14,18 +14,64 @@ class LabsScreen extends ConsumerStatefulWidget {
   ConsumerState<LabsScreen> createState() => _LabsScreenState();
 }
 
-class _LabsScreenState extends ConsumerState<LabsScreen> {
+class _LabsScreenState extends ConsumerState<LabsScreen>
+    with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
   List<Room> _allRooms = [];
   List<Room> _filteredRooms = [];
   bool _isLoading = true;
   String _searchQuery = '';
   int? _selectedCapacity;
   int? _selectedStatus; // 0: all, 1: active, 2: maintenance
+  DateTime? _lastRefreshTime;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadRooms();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      debugPrint('📱 Labs: App resumed, refreshing...');
+      _refreshData();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _checkAndRefresh();
+  }
+
+  void _checkAndRefresh() {
+    final now = DateTime.now();
+    if (_lastRefreshTime == null || 
+        now.difference(_lastRefreshTime!).inSeconds > 5) {
+      debugPrint('🔄 Labs: Checking for refresh...');
+      _refreshData();
+    }
+  }
+
+  Future<void> _refreshData() async {
+    if (_isLoading) {
+      debugPrint('⏭️ Labs: Already loading, skipping...');
+      return;
+    }
+    
+    debugPrint('🔄 Labs: Refreshing data...');
+    _lastRefreshTime = DateTime.now();
+    await _loadRooms();
   }
 
   Future<void> _loadRooms() async {
@@ -84,6 +130,7 @@ class _LabsScreenState extends ConsumerState<LabsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     if (_isLoading) {
       return Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),

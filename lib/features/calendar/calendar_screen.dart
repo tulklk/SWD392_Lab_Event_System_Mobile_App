@@ -4,8 +4,10 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:go_router/go_router.dart';
 import '../../domain/models/event.dart';
 import '../../domain/models/booking.dart';
+import '../../domain/models/lab.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/booking_repository.dart';
+import '../../data/repositories/lab_repository.dart';
 import '../../core/utils/result.dart';
 import '../auth/auth_controller.dart';
 import '../bookings/booking_detail_bottomsheet.dart';
@@ -19,19 +21,101 @@ class CalendarScreen extends ConsumerStatefulWidget {
 
 enum CalendarFilter { all, events, bookings }
 
-class _CalendarScreenState extends ConsumerState<CalendarScreen> {
+class _CalendarScreenState extends ConsumerState<CalendarScreen> 
+    with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   List<Event> _events = [];
   List<Booking> _bookings = [];
+  Map<String, String> _roomIdToName = {}; // Cache: roomId -> room name
   CalendarFilter _selectedFilter = CalendarFilter.all;
   bool _isLoading = false;
+  DateTime? _lastRefreshTime;
+
+  @override
+  bool get wantKeepAlive => true; // Keep state alive when switching tabs
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _selectedDay = DateTime.now();
-    _loadDataForDay(_selectedDay!);
+    _initializeData(); // Initialize data properly
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Refresh when app resumes or widget becomes visible
+    if (state == AppLifecycleState.resumed && mounted) {
+      debugPrint('📱 Calendar: App resumed, refreshing...');
+      _refreshData();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh when user navigates back to this tab
+    _checkAndRefresh();
+  }
+
+  void _checkAndRefresh() {
+    final now = DateTime.now();
+    // Only refresh if last refresh was more than 5 seconds ago
+    if (_lastRefreshTime == null || 
+        now.difference(_lastRefreshTime!).inSeconds > 5) {
+      debugPrint('🔄 Calendar: Checking for refresh...');
+      _refreshData();
+    }
+  }
+
+  Future<void> _refreshData() async {
+    if (_isLoading) {
+      debugPrint('⏭️ Calendar: Already loading, skipping...');
+      return;
+    }
+    
+    debugPrint('🔄 Calendar: Refreshing data...');
+    _lastRefreshTime = DateTime.now();
+    
+    await _loadRoomNames();
+    if (_selectedDay != null && mounted) {
+      await _loadDataForDay(_selectedDay!);
+    }
+  }
+
+  Future<void> _initializeData() async {
+    // Load room names FIRST, then load bookings
+    await _loadRoomNames();
+    await _loadDataForDay(_selectedDay!);
+  }
+
+  Future<void> _loadRoomNames() async {
+    debugPrint('🏢 Loading room names...');
+    final labRepository = LabRepository();
+    final result = await labRepository.getAllLabs();
+    
+    if (result.isSuccess && result.data != null) {
+      final Map<String, String> roomMap = {};
+      for (final lab in result.data!) {
+        roomMap[lab.roomId] = lab.name;
+        debugPrint('   📍 ${lab.roomId} → ${lab.name}');
+      }
+      if (mounted) {
+        setState(() {
+          _roomIdToName = roomMap;
+        });
+        debugPrint('✅ Loaded ${roomMap.length} room names');
+      }
+    } else {
+      debugPrint('❌ Failed to load room names: ${result.error}');
+    }
   }
 
   Future<void> _loadDataForDay(DateTime day) async {
@@ -77,6 +161,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     final theme = Theme.of(context);
     
     return Scaffold(
@@ -171,11 +256,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             selectedDayPredicate: (day) {
               return isSameDay(_selectedDay, day);
             },
-            onDaySelected: (selectedDay, focusedDay) {
+            onDaySelected: (selectedDay, focusedDay) async {
               setState(() {
                 _selectedDay = selectedDay;
                 _focusedDay = focusedDay;
               });
+              // Ensure room names are loaded before loading bookings
+              if (_roomIdToName.isEmpty) {
+                await _loadRoomNames();
+              }
               _loadDataForDay(selectedDay);
             },
             onPageChanged: (focusedDay) {
@@ -371,7 +460,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
     
     return RefreshIndicator(
-      onRefresh: () => _loadDataForDay(_selectedDay!),
+      onRefresh: () async {
+        await _loadRoomNames(); // Reload room names
+        await _loadDataForDay(_selectedDay!);
+      },
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: items.length,
@@ -536,7 +628,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
-          backgroundColor: Colors.transparent,
+          backgroundColor: Colors.white,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
           builder: (context) => BookingDetailBottomSheet(booking: booking),
         );
       },
@@ -644,7 +739,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   ),
                   const SizedBox(height: 6),
                   
-                  // Room ID
+                  // Room Name
                   Row(
                     children: [
                       const Icon(
@@ -654,15 +749,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       ),
                       const SizedBox(width: 6),
                       Expanded(
-                        child: Text(
-                          'Room: ${booking.roomId}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF475569),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: Builder(
+                          builder: (context) {
+                            final roomName = _roomIdToName[booking.roomId];
+                            debugPrint('🔍 Booking roomId: ${booking.roomId}');
+                            debugPrint('🔍 Found room name: ${roomName ?? "NOT FOUND"}');
+                            debugPrint('🔍 Available rooms: ${_roomIdToName.keys.join(", ")}');
+                            
+                            return Text(
+                              roomName ?? 'Room: ${booking.roomId}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF475569),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            );
+                          },
                         ),
                       ),
                     ],

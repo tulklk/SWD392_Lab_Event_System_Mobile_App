@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/utils/result.dart';
 import '../../domain/models/user.dart' as app_user;
 import '../../domain/enums/role.dart';
+import 'session_controller.dart';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -12,6 +13,7 @@ class AuthService {
     scopes: ['email', 'profile'],
   );
   final _uuid = const Uuid();
+  final _sessionController = SessionController.instance;
 
   // Get current Supabase auth user
   bool get isLoggedIn {
@@ -86,13 +88,32 @@ class AuthService {
     }
   }
 
-  /// Login with email and password
+  /// Login with username and password
   Future<Result<app_user.User>> login({
-    required String email,
+    required String username,
     required String password,
   }) async {
     try {
-      // 1. Sign in with Supabase Auth
+      // 1. Find email from username in tbl_users
+      final userResponse = await _supabase
+          .from('tbl_users')
+          .select('Email, Id, status')
+          .eq('Username', username)
+          .maybeSingle();
+
+      if (userResponse == null) {
+        return Failure('Username not found. Please check your credentials.');
+      }
+
+      // Check if user is active
+      final status = userResponse['status'] as int?;
+      if (status == 0) {
+        return Failure('Your account has been deactivated.');
+      }
+
+      final email = userResponse['Email'] as String;
+      
+      // 2. Sign in with Supabase Auth using email
       final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
@@ -102,14 +123,11 @@ class AuthService {
         return Failure('Login failed. Please check your credentials.');
       }
 
-      // 2. Get user data from tbl_users
+      // 3. Get user data from tbl_users
       final userResult = await _getUserById(response.user!.id);
       if (userResult.isSuccess && userResult.data != null) {
-        // Check if user is active
-        if (userResult.data!.status == 0) {
-          await logout();
-          return Failure('Your account has been deactivated.');
-        }
+        // 4. Save session to SessionController
+        await _saveSession(response.user!.id, response.session);
         return Success(userResult.data!);
       }
 
@@ -183,6 +201,8 @@ class AuthService {
       // 4. Check if user exists in tbl_users (by userId first, then by email)
       final existingUser = await _getUserById(userId);
       if (existingUser.isSuccess && existingUser.data != null) {
+        // IMPORTANT: Save session for existing user!
+        await _saveSession(userId, response.session);
         return Success(existingUser.data!);
       }
 
@@ -200,6 +220,8 @@ class AuthService {
           final existingUserId = existingByEmail['Id'] as String;
           final userResult = await _getUserById(existingUserId);
           if (userResult.isSuccess && userResult.data != null) {
+            // IMPORTANT: Save session for existing user!
+            await _saveSession(userId, response.session);
             return Success(userResult.data!);
           }
         }
@@ -241,6 +263,8 @@ class AuthService {
               final existingUserId = existingByEmail['Id'] as String;
               final userResult = await _getUserById(existingUserId);
               if (userResult.isSuccess && userResult.data != null) {
+                // IMPORTANT: Save session for existing user!
+                await _saveSession(userId, response.session);
                 return Success(userResult.data!);
               }
             }
@@ -257,6 +281,9 @@ class AuthService {
       // 7. Get complete user data
       final userResult = await _getUserById(userId);
       if (userResult.isSuccess && userResult.data != null) {
+        // 8. Save session to SessionController
+        final session = _supabase.auth.currentSession;
+        await _saveSession(userId, session);
         return Success(userResult.data!);
       }
 
@@ -271,6 +298,9 @@ class AuthService {
   /// Logout user
   Future<Result<void>> logout() async {
     try {
+      // Clear session from SessionController
+      await _sessionController.clearSession();
+      
       // Sign out from Google if signed in
       if (await _googleSignIn.isSignedIn()) {
         await _googleSignIn.signOut();
@@ -278,6 +308,8 @@ class AuthService {
       
       // Sign out from Supabase
       await _supabase.auth.signOut();
+      
+      debugPrint('✅ Logout successful');
       return const Success(null);
     } catch (e) {
       return Failure('Logout failed: $e');
@@ -290,14 +322,40 @@ class AuthService {
   Future<Result<app_user.User?>> getCurrentUserProfile() async {
     try {
       debugPrint('🔐 AuthService: Checking current session...');
+      debugPrint('📊 Step 1: Checking Supabase session...');
+      
+      // First check Supabase session
       final session = _supabase.auth.currentSession;
       
       if (session == null || session.user == null) {
-        debugPrint('ℹ️ AuthService: No active session');
+        debugPrint('ℹ️ AuthService: No active Supabase session');
+        debugPrint('📊 Step 2: Checking SessionController...');
+        
+        // Check if we have a valid session in SessionController
+        final hasSession = await _sessionController.loadSession();
+        if (hasSession && _sessionController.userId != null) {
+          debugPrint('📱 SessionController has valid session for user: ${_sessionController.userId}');
+          debugPrint('📱 Token preview: ${_sessionController.token?.substring(0, 20)}...');
+          debugPrint('📱 Expires at: ${_sessionController.expiryDate}');
+          
+          // Try to get user by stored userId
+          final userResult = await _getUserById(_sessionController.userId!);
+          if (userResult.isSuccess) {
+            debugPrint('✅ User restored from SessionController');
+          }
+          return userResult;
+        }
+        
+        debugPrint('❌ No valid session found in SessionController');
         return const Success(null);
       }
 
-      debugPrint('✅ AuthService: Active session found for ${session.user.email}');
+      debugPrint('✅ AuthService: Active Supabase session found for ${session.user.email}');
+      debugPrint('📅 Supabase session expires at: ${session.expiresAt}');
+      
+      // Save/Update session in SessionController (as backup)
+      await _saveSession(session.user.id, session);
+      
       return await _getUserById(session.user.id);
     } catch (e) {
       debugPrint('❌ AuthService: Error getting profile - $e');
@@ -316,7 +374,50 @@ class AuthService {
           .maybeSingle();
 
       if (response == null) {
-        return Failure('User not found');
+        debugPrint('⚠️ User not found in tbl_users: $userId');
+        debugPrint('🔧 Attempting to auto-create user from Supabase Auth...');
+        
+        // Try to get user from Supabase Auth and create in tbl_users
+        final supabaseUser = _supabase.auth.currentUser;
+        if (supabaseUser != null && supabaseUser.id == userId) {
+          final email = supabaseUser.email ?? '';
+          final username = email.split('@')[0];
+          
+          debugPrint('📝 Creating user in tbl_users:');
+          debugPrint('   Email: $email');
+          debugPrint('   Username: $username');
+          
+          // Create user in tbl_users
+          final now = DateTime.now();
+          final userData = {
+            'Id': userId,
+            'Username': username,
+            'Fullname': supabaseUser.userMetadata?['full_name'] ?? username,
+            'Email': email,
+            'Password': '',
+            'MSSV': null,
+            'status': 1,
+            'CreatedAt': now.toIso8601String(),
+            'LastUpdatedAt': now.toIso8601String(),
+          };
+          
+          try {
+            await _supabase.from('tbl_users').insert(userData);
+            debugPrint('✅ User created successfully in tbl_users');
+            
+            // Assign default role
+            await _assignRoleToUser(userId, Role.student);
+            debugPrint('✅ Default role (student) assigned');
+            
+            // Retry getting user
+            return await _getUserById(userId);
+          } catch (e) {
+            debugPrint('❌ Failed to create user: $e');
+            return Failure('User not found and failed to create: $e');
+          }
+        }
+        
+        return Failure('User not found in tbl_users and no Supabase Auth user available');
       }
 
       // Get user roles
@@ -486,4 +587,182 @@ class AuthService {
 
   // Stream auth state changes
   Stream<AuthState> get authStateChanges => _supabase.auth.onAuthStateChange;
+
+  // ==================== SESSION MANAGEMENT ====================
+
+  /// Save session to SessionController
+  Future<void> _saveSession(String userId, Session? session) async {
+    if (session == null) return;
+    
+    try {
+      final accessToken = session.accessToken;
+      final expiresAt = session.expiresAt != null 
+          ? DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000)
+          : DateTime.now().add(const Duration(hours: 1));
+      
+      await _sessionController.setSession(
+        userId: userId,
+        token: accessToken,
+        expiryDate: expiresAt,
+      );
+      
+      debugPrint('✅ Session saved to SessionController');
+    } catch (e) {
+      debugPrint('⚠️ Error saving session to SessionController: $e');
+    }
+  }
+
+  /// Check if SessionController has valid session
+  Future<bool> hasValidSession() async {
+    return await _sessionController.loadSession();
+  }
+
+  // ==================== SEED ADMIN ACCOUNT ====================
+  
+  /// Seed admin account for development/testing
+  /// Call this once to create admin@fpt.edu.vn with password
+  Future<Result<void>> seedAdminAccount({
+    String email = 'admin@fpt.edu.vn',
+    String password = 'Admin@123',
+  }) async {
+    try {
+      debugPrint('🌱 Seeding admin account...');
+      
+      // 1. Check if user already exists in tbl_users (by email or username)
+      final existingUserByEmail = await _supabase
+          .from('tbl_users')
+          .select()
+          .eq('Email', email)
+          .maybeSingle();
+      
+      final existingUserByUsername = await _supabase
+          .from('tbl_users')
+          .select()
+          .eq('Username', 'admin')
+          .maybeSingle();
+      
+      final existingUser = existingUserByEmail ?? existingUserByUsername;
+      
+      // 2. Try to register admin in Supabase Auth
+      String? newUserId;
+      try {
+        final authResponse = await _supabase.auth.signUp(
+          email: email,
+          password: password,
+        );
+        
+        if (authResponse.user != null) {
+          debugPrint('✅ Admin account created in Supabase Auth');
+          newUserId = authResponse.user!.id;
+          
+          // Sign out immediately
+          await _supabase.auth.signOut();
+        } else {
+          return Failure('Failed to create admin account in Supabase Auth');
+        }
+      } on AuthException catch (e) {
+        if (e.message.contains('already registered') || 
+            e.message.contains('User already registered')) {
+          debugPrint('ℹ️ Admin account already exists in Supabase Auth');
+          
+          // Try to sign in to get the user ID
+          try {
+            final signInResponse = await _supabase.auth.signInWithPassword(
+              email: email,
+              password: password,
+            );
+            
+            if (signInResponse.user != null) {
+              newUserId = signInResponse.user!.id;
+              debugPrint('✅ Got existing admin user ID: $newUserId');
+              
+              // Sign out immediately
+              await _supabase.auth.signOut();
+            }
+          } catch (signInError) {
+            debugPrint('⚠️ Could not sign in to get user ID: $signInError');
+            return const Success(null); // Account exists but can't get ID, consider it success
+          }
+        } else {
+          rethrow;
+        }
+      }
+      
+      // 3. Handle tbl_users record
+      if (newUserId != null) {
+        if (existingUser != null) {
+          // User exists in tbl_users, update with new auth ID
+          final oldId = existingUser['Id'] as String;
+          
+          if (oldId != newUserId) {
+            debugPrint('🔄 Updating admin user ID from $oldId to $newUserId');
+            
+            // Delete old user record (to avoid FK constraints)
+            try {
+              // First, delete any role assignments for old ID
+              await _supabase
+                  .from('tbl_users_roles')
+                  .delete()
+                  .eq('UserId', oldId);
+              
+              // Delete old user record
+              await _supabase
+                  .from('tbl_users')
+                  .delete()
+                  .eq('Id', oldId);
+              
+              debugPrint('✅ Deleted old admin user record');
+            } catch (deleteError) {
+              debugPrint('⚠️ Could not delete old user: $deleteError');
+            }
+            
+            // Insert new user record with new ID
+            final now = DateTime.now();
+            final userData = {
+              'Id': newUserId,
+              'Username': existingUser['Username'] ?? 'admin',
+              'Fullname': existingUser['Fullname'] ?? 'Administrator',
+              'Email': email,
+              'Password': '',
+              'MSSV': existingUser['MSSV'] ?? 'ADMIN001',
+              'status': 1,
+              'CreatedAt': existingUser['CreatedAt'] ?? now.toIso8601String(),
+              'LastUpdatedAt': now.toIso8601String(),
+            };
+            
+            await _supabase.from('tbl_users').insert(userData);
+            debugPrint('✅ Created new admin user record with new ID');
+          } else {
+            debugPrint('✅ Admin user ID already matches, no update needed');
+          }
+        } else {
+          // User doesn't exist in tbl_users, create new
+          final now = DateTime.now();
+          final userData = {
+            'Id': newUserId,
+            'Username': 'admin',
+            'Fullname': 'Administrator',
+            'Email': email,
+            'Password': '',
+            'MSSV': 'ADMIN001',
+            'status': 1,
+            'CreatedAt': now.toIso8601String(),
+            'LastUpdatedAt': now.toIso8601String(),
+          };
+          
+          await _supabase.from('tbl_users').insert(userData);
+          debugPrint('✅ Admin user created in tbl_users');
+        }
+        
+        // 4. Assign admin role
+        await _assignRoleToUser(newUserId, Role.admin);
+        debugPrint('✅ Admin role assigned');
+      }
+      
+      return const Success(null);
+    } catch (e) {
+      debugPrint('❌ Error seeding admin account: $e');
+      return Failure('Failed to seed admin account: $e');
+    }
+  }
 }

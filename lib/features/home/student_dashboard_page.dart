@@ -18,14 +18,60 @@ class StudentDashboardPage extends ConsumerStatefulWidget {
   ConsumerState<StudentDashboardPage> createState() => _StudentDashboardPageState();
 }
 
-class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage> {
+class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
+    with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
   List<Event> _upcomingEvents = [];
   bool _isLoadingEvents = true;
+  DateTime? _lastRefreshTime;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadUpcomingEvents();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      debugPrint('📱 Home: App resumed, refreshing...');
+      _refreshData();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _checkAndRefresh();
+  }
+
+  void _checkAndRefresh() {
+    final now = DateTime.now();
+    if (_lastRefreshTime == null || 
+        now.difference(_lastRefreshTime!).inSeconds > 5) {
+      debugPrint('🔄 Home: Checking for refresh...');
+      _refreshData();
+    }
+  }
+
+  Future<void> _refreshData() async {
+    if (_isLoadingEvents) {
+      debugPrint('⏭️ Home: Already loading, skipping...');
+      return;
+    }
+    
+    debugPrint('🔄 Home: Refreshing data...');
+    _lastRefreshTime = DateTime.now();
+    await _loadUpcomingEvents();
   }
 
   Future<void> _loadUpcomingEvents() async {
@@ -87,6 +133,7 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     final currentUser = ref.watch(currentUserProvider);
     
     return Scaffold(
