@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/enums/booking_status.dart';
+import '../../domain/enums/role.dart';
 import '../../data/repositories/booking_repository.dart';
 import '../../core/utils/result.dart';
 import '../auth/auth_controller.dart';
@@ -16,10 +17,13 @@ class MyBookingsScreen extends ConsumerStatefulWidget {
 }
 
 class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> 
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
   List<Booking> _bookings = [];
   bool _isLoading = false;
   DateTime? _lastRefreshTime;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -38,9 +42,35 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Refresh when app resumes
     if (state == AppLifecycleState.resumed && mounted) {
-      debugPrint('📱 App resumed, refreshing bookings...');
-      _loadBookings();
+      debugPrint('📱 My Bookings: App resumed, refreshing...');
+      _refreshData();
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _checkAndRefresh();
+  }
+
+  void _checkAndRefresh() {
+    final now = DateTime.now();
+    if (_lastRefreshTime == null || 
+        now.difference(_lastRefreshTime!).inSeconds > 5) {
+      debugPrint('🔄 My Bookings: Checking for refresh...');
+      _refreshData();
+    }
+  }
+
+  Future<void> _refreshData() async {
+    if (_isLoading) {
+      debugPrint('⏭️ My Bookings: Already loading, skipping...');
+      return;
+    }
+    
+    debugPrint('🔄 My Bookings: Refreshing data...');
+    _lastRefreshTime = DateTime.now();
+    await _loadBookings();
   }
 
   Future<void> _loadBookings() async {
@@ -112,6 +142,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -126,25 +157,6 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
             color: Color(0xFF1E293B),
           ),
         ),
-        leading: IconButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
-          icon: const Icon(
-            Icons.arrow_back,
-            color: Color(0xFF1E293B),
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: _loadBookings,
-            icon: const Icon(
-              Icons.refresh,
-              color: Color(0xFF1E293B),
-            ),
-            tooltip: 'Refresh',
-          ),
-        ],
       ),
       body: DefaultTabController(
         length: 2,
@@ -183,15 +195,20 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     }
     
     final now = DateTime.now();
+    // Upcoming: TẤT CẢ Pending (chờ duyệt) HOẶC (chưa kết thúc VÀ không cancelled)
     final upcomingBookings = _bookings
-        .where((b) => b.endTime.isAfter(now) && !b.isCancelled)
+        .where((b) => b.isPending || (b.endTime.isAfter(now) && !b.isCancelled))
         .toList()
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
     
     debugPrint('🔍 Total bookings: ${_bookings.length}');
     debugPrint('✅ Upcoming bookings: ${upcomingBookings.length}');
     for (final b in upcomingBookings) {
-      debugPrint('  - ${b.purpose} | ${b.startTime} - ${b.endTime} | Status: ${b.status}');
+      final statusText = b.isPending ? 'Pending (chờ duyệt)' 
+          : b.isApproved ? 'Approved' 
+          : b.isRejected ? 'Rejected' 
+          : 'Cancelled';
+      debugPrint('  - ${b.purpose} | ${b.startTime} - ${b.endTime} | Status: $statusText');
     }
     
     if (upcomingBookings.isEmpty) {
@@ -255,10 +272,21 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
       return const Center(child: CircularProgressIndicator());
     }
     
+    final now = DateTime.now();
+    // Past: (Đã kết thúc HOẶC Cancelled) VÀ KHÔNG phải Pending
     final pastBookings = _bookings
-        .where((b) => b.endTime.isBefore(DateTime.now()) || b.isCancelled)
+        .where((b) => (b.endTime.isBefore(now) || b.isCancelled) && !b.isPending)
         .toList()
       ..sort((a, b) => b.startTime.compareTo(a.startTime));
+    
+    debugPrint('📚 Past bookings: ${pastBookings.length}');
+    for (final b in pastBookings) {
+      final statusText = b.isCancelled ? 'Cancelled' 
+          : b.isRejected ? 'Rejected' 
+          : b.isApproved ? 'Completed' 
+          : 'Other';
+      debugPrint('  - ${b.purpose} | ${b.startTime} - ${b.endTime} | Status: $statusText');
+    }
     
     if (pastBookings.isEmpty) {
       return Center(
@@ -301,6 +329,8 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
 
   Widget _buildBookingCard(Booking booking, {required bool isUpcoming}) {
     final statusColor = _getStatusColor(booking.bookingStatus);
+    final currentUser = ref.watch(currentUserProvider);
+    final isStudent = currentUser?.role == Role.student;
     
     return Container(
       padding: const EdgeInsets.all(16),
@@ -399,6 +429,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
           const SizedBox(height: 12),
           Row(
             children: [
+              // QR Code button for approved bookings
               if (isUpcoming && booking.isApproved) ...[
                 Expanded(
                   child: OutlinedButton.icon(
@@ -415,7 +446,9 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
                 ),
                 const SizedBox(width: 8),
               ],
-              if (isUpcoming && !booking.isCancelled) ...[
+              
+              // Cancel button - ONLY for Admin/Lecturer, NOT for Student
+              if (isUpcoming && !booking.isCancelled && !isStudent) ...[
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => _showCancelDialog(booking),
@@ -424,24 +457,6 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.red,
                       side: const BorderSide(color: Colors.red),
-                    ),
-                  ),
-                ),
-              ],
-              if (!isUpcoming || booking.isCancelled) ...[
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (context) => BookingDetailBottomSheet(booking: booking),
-                      );
-                    },
-                    child: const Text('View Details'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF64748B),
                     ),
                   ),
                 ),

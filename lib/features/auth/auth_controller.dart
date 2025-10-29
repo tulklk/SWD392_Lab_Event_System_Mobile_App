@@ -42,14 +42,14 @@ class AuthController extends Notifier<AsyncValue<User?>> {
     }
   }
 
-  // Login with email and password
+  // Login with username and password
   Future<Result<User>> login({
-    required String email,
+    required String username,
     required String password,
   }) async {
     try {
       final result = await _authService.login(
-        email: email,
+        username: username,
         password: password,
       );
 
@@ -135,6 +135,15 @@ class AuthController extends Notifier<AsyncValue<User?>> {
       return await _authService.resetPassword(email: email);
     } catch (e) {
       return Failure('Password reset failed: $e');
+    }
+  }
+
+  // Seed admin account (for development)
+  Future<Result<void>> seedAdminAccount() async {
+    try {
+      return await _authService.seedAdminAccount();
+    } catch (e) {
+      return Failure('Failed to seed admin account: $e');
     }
   }
 

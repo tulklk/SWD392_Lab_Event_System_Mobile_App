@@ -13,7 +13,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _isGoogleLoading = false;
@@ -29,7 +29,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final authController = ref.read(authControllerProvider.notifier);
     
     final result = await authController.login(
-      email: _emailController.text.trim(),
+      username: _usernameController.text.trim(),
       password: _passwordController.text.trim(),
     );
 
@@ -128,6 +128,46 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
         centerTitle: true,
         actions: [
+          // Debug: Seed Admin Account
+          IconButton(
+            onPressed: () async {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Creating admin account...'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+              
+              final authController = ref.read(authControllerProvider.notifier);
+              final result = await authController.seedAdminAccount();
+              
+              if (mounted) {
+                if (result.isSuccess) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('✅ Admin account created!\nUsername: admin\nPassword: Admin@123'),
+                      backgroundColor: Colors.green,
+                      duration: Duration(seconds: 5),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(result.error ?? 'Admin account may already exist'),
+                      backgroundColor: Colors.orange,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
+              }
+            },
+            icon: const Icon(
+              Icons.admin_panel_settings,
+              color: Color(0xFFFF6600),
+              size: 22,
+            ),
+            tooltip: 'Create Admin Account',
+          ),
           // Debug: Clear session button
           IconButton(
             onPressed: () async {
@@ -162,9 +202,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               children: [
                 const SizedBox(height: 20),
                 
-                // Email field
+                // Username field
                 const Text(
-                  'Email',
+                  'Username',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -173,12 +213,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
+                  controller: _usernameController,
+                  keyboardType: TextInputType.text,
                   decoration: const InputDecoration(
-                    hintText: 'Enter your email',
+                    hintText: 'Enter your username',
                     hintStyle: TextStyle(color: Color(0xFF64748B)),
-                    prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF64748B)),
+                    prefixIcon: Icon(Icons.person_outline, color: Color(0xFF64748B)),
                     border: OutlineInputBorder(
                       borderSide: BorderSide(color: Color(0xFFE2E8F0)),
                       borderRadius: BorderRadius.all(Radius.circular(8)),
@@ -196,10 +236,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Please enter a valid email';
+                      return 'Please enter your username';
                     }
                     return null;
                   },
@@ -429,7 +466,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }

@@ -105,7 +105,12 @@ class _AppInitializerState extends ConsumerState<AppInitializer> {
       }
       
       // Initialize Hive (for local caching of other data like labs, events, bookings)
+      try {
       await Hive.initFlutter();
+        debugPrint('✅ Hive initialized');
+      } catch (e) {
+        debugPrint('ℹ️ Hive already initialized: $e');
+      }
       
       // Initialize repositories
       final labRepository = LabRepository();
@@ -113,10 +118,15 @@ class _AppInitializerState extends ConsumerState<AppInitializer> {
       final userRepository = UserRepository();
       final bookingRepository = BookingRepository();
       
+      try {
       await labRepository.init();
       await eventRepository.init();
       await userRepository.init();
       await bookingRepository.init();
+        debugPrint('✅ Repositories initialized');
+      } catch (e) {
+        debugPrint('⚠️ Repository init error (may be already open): $e');
+      }
       
       // Seed data if needed (only for labs and events, users will be in Supabase)
       await SeedData.seedIfNeeded(
