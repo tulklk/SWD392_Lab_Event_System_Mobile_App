@@ -57,8 +57,14 @@ class AuthController extends Notifier<AsyncValue<User?>> {
         // Get user profile
         final profileResult = await _authService.getCurrentUserProfile();
         if (profileResult.isSuccess && profileResult.data != null) {
-          state = AsyncValue.data(profileResult.data);
-          return Success(profileResult.data!);
+          final user = profileResult.data!;
+          debugPrint('🔐 AuthController: Login successful');
+          debugPrint('   User: ${user.email}');
+          debugPrint('   Role: ${user.role.name} (${user.role.displayName})');
+          debugPrint('   All Roles: ${user.roles.map((r) => r.name).join(", ")}');
+          
+          state = AsyncValue.data(user);
+          return Success(user);
         } else {
           return Failure('Failed to load user profile');
         }
