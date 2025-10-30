@@ -15,6 +15,7 @@ import '../features/bookings/qr_ticket_screen.dart';
 import '../features/admin/admin_dashboard_screen.dart';
 import '../features/admin/manage_labs_screen.dart';
 import '../features/admin/manage_events_screen.dart';
+import '../features/lecturer/lecturer_dashboard_screen.dart';
 import '../features/auth/auth_controller.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -58,8 +59,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                 debugPrint('➡️ Router: Redirecting to /admin (Admin)');
                 return '/admin';
               case Role.lecturer:
-                debugPrint('➡️ Router: Redirecting to /admin (Lecturer)');
-                return '/admin';
+                debugPrint('➡️ Router: Redirecting to /lecturer (Lecturer)');
+                return '/lecturer';
               case Role.student:
               default:
                 debugPrint('➡️ Router: Redirecting to /home (Student)');
@@ -86,8 +87,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               debugPrint('➡️ Router: Redirecting to /admin (Admin)');
               return '/admin';
             case Role.lecturer:
-              debugPrint('➡️ Router: Redirecting to /admin (Lecturer)');
-              return '/admin';
+              debugPrint('➡️ Router: Redirecting to /lecturer (Lecturer)');
+              return '/lecturer';
             case Role.student:
             default:
               debugPrint('➡️ Router: Redirecting to /home (Student)');
@@ -148,6 +149,25 @@ final routerProvider = Provider<GoRouter>((ref) {
           final booking = state.extra as Booking;
           return QRTicketScreen(booking: booking);
         },
+      ),
+      GoRoute(
+        path: '/lecturer',
+        name: 'lecturer-dashboard',
+        redirect: (context, state) {
+          final authState = ref.read(authControllerProvider);
+          final currentUser = authState.when(
+            data: (user) => user,
+            loading: () => null,
+            error: (_, __) => null,
+          );
+          
+          // Only lecturer can access lecturer routes
+          if (currentUser?.role != Role.lecturer) {
+            return '/home';
+          }
+          return null;
+        },
+        builder: (context, state) => const LecturerDashboardScreen(),
       ),
       GoRoute(
         path: '/admin',

@@ -433,12 +433,15 @@ class AuthService {
           final roleName = roleData['tbl_roles']?['name'] as String?;
           if (roleName != null) {
             try {
+              // Case-insensitive comparison
               final role = Role.values.firstWhere(
-                (r) => r.name == roleName,
+                (r) => r.name.toLowerCase() == roleName.toLowerCase(),
                 orElse: () => Role.student,
               );
               roles.add(role);
+              debugPrint('📋 Role loaded: $roleName -> ${role.name}');
             } catch (e) {
+              debugPrint('⚠️ Invalid role name: $roleName');
               // Invalid role name, skip
             }
           }
@@ -447,12 +450,19 @@ class AuthService {
 
       // If no roles, assign default student role
       if (roles.isEmpty) {
+        debugPrint('⚠️ No roles found, assigning default student role');
         roles.add(Role.student);
       }
 
       // Create user object
       final user = app_user.User.fromJson(response);
       final userWithRoles = user.copyWith(roles: roles);
+
+      debugPrint('👤 User loaded:');
+      debugPrint('   Email: ${userWithRoles.email}');
+      debugPrint('   Username: ${userWithRoles.username}');
+      debugPrint('   Roles: ${userWithRoles.roles.map((r) => r.name).join(", ")}');
+      debugPrint('   Primary Role: ${userWithRoles.role.name}');
 
       return Success(userWithRoles);
     } catch (e) {

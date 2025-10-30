@@ -42,11 +42,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         // Redirect based on user role
         final user = result.data;
         if (user != null) {
+          debugPrint('🚀 LoginScreen: Redirecting user after login');
+          debugPrint('   Email: ${user.email}');
+          debugPrint('   Role: ${user.role.name}');
+          debugPrint('   Redirect to: ${user.role == Role.admin ? "/admin" : user.role == Role.lecturer ? "/lecturer" : "/home"}');
+          
           // Redirect directly to appropriate page
           switch (user.role) {
             case Role.admin:
-            case Role.lecturer:
               context.go('/admin');
+              break;
+            case Role.lecturer:
+              context.go('/lecturer');
               break;
             case Role.student:
             default:
@@ -85,11 +92,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         // Redirect based on user role
         final user = result.data;
         if (user != null) {
+          debugPrint('🚀 LoginScreen: Redirecting user after Google Sign-In');
+          debugPrint('   Email: ${user.email}');
+          debugPrint('   Role: ${user.role.name}');
+          debugPrint('   Redirect to: ${user.role == Role.admin ? "/admin" : user.role == Role.lecturer ? "/lecturer" : "/home"}');
+          
           // Redirect directly to appropriate page
           switch (user.role) {
             case Role.admin:
-            case Role.lecturer:
               context.go('/admin');
+              break;
+            case Role.lecturer:
+              context.go('/lecturer');
               break;
             case Role.student:
             default:
