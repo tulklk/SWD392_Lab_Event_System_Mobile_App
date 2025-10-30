@@ -27,6 +27,7 @@ class EventRepository {
     required String createdBy,
     String? location,
     bool visibility = true,
+    int status = 1, // 0: draft, 1: active, 2: cancelled
   }) async {
     try {
       final now = DateTime.now();
@@ -43,7 +44,7 @@ class EventRepository {
             'CreatedBy': createdBy,
             'Location': location,
             'Visibility': visibility,
-            'Status': 1, // active
+            'Status': status,
             'CreatedAt': now.toIso8601String(),
             'LastUpdatedAt': now.toIso8601String(),
           })
@@ -77,13 +78,13 @@ class EventRepository {
     }
   }
 
-  // Get all active events
+  // Get all events (including drafts)
   Future<Result<List<Event>>> getAllEvents() async {
     try {
       final response = await _supabase
           .from('tbl_events')
           .select()
-          .eq('Status', 1) // active only
+          .neq('Status', 2) // exclude cancelled
           .order('StartDate', ascending: true);
 
       final events = (response as List)

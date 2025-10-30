@@ -16,6 +16,8 @@ import '../features/admin/admin_dashboard_screen.dart';
 import '../features/admin/manage_labs_screen.dart';
 import '../features/admin/manage_events_screen.dart';
 import '../features/lecturer/lecturer_dashboard_screen.dart';
+import '../features/lecturer/create_event_screen.dart';
+import '../features/lecturer/event_registrations_screen.dart';
 import '../features/auth/auth_controller.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -168,6 +170,27 @@ final routerProvider = Provider<GoRouter>((ref) {
           return null;
         },
         builder: (context, state) => const LecturerDashboardScreen(),
+      ),
+      GoRoute(
+        path: '/lecturer/events/create',
+        name: 'lecturer-create-event',
+        builder: (context, state) => const CreateEventScreen(),
+      ),
+      GoRoute(
+        path: '/lecturer/events/:id/edit',
+        name: 'lecturer-edit-event',
+        builder: (context, state) {
+          final eventId = state.pathParameters['id']!;
+          return CreateEventScreen(eventId: eventId);
+        },
+      ),
+      GoRoute(
+        path: '/lecturer/events/:id/registrations',
+        name: 'lecturer-event-registrations',
+        builder: (context, state) {
+          final eventId = state.pathParameters['id']!;
+          return EventRegistrationsScreen(eventId: eventId);
+        },
       ),
       GoRoute(
         path: '/admin',

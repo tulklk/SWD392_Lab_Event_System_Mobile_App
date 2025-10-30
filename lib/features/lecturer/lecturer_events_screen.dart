@@ -96,8 +96,14 @@ class _LecturerEventsScreenState extends ConsumerState<LecturerEventsScreen> {
                         return _EventCard(
                           event: event,
                           onTap: () {
-                            // Navigate to event detail
-                            context.push('/lecturer/events/${event.id}');
+                            // Navigate to event registrations
+                            context.push('/lecturer/events/${event.id}/registrations');
+                          },
+                          onEdit: () async {
+                            final result = await context.push('/lecturer/events/${event.id}/edit');
+                            if (result == true) {
+                              _loadEvents();
+                            }
                           },
                         );
                       },
@@ -124,10 +130,12 @@ class _LecturerEventsScreenState extends ConsumerState<LecturerEventsScreen> {
 class _EventCard extends StatelessWidget {
   final Event event;
   final VoidCallback onTap;
+  final VoidCallback? onEdit;
 
   const _EventCard({
     required this.event,
     required this.onTap,
+    this.onEdit,
   });
 
   @override
@@ -269,6 +277,25 @@ class _EventCard extends StatelessWidget {
                   ],
                 ],
               ),
+              if (onEdit != null) ...[
+                const SizedBox(height: 12),
+                const Divider(),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit, size: 16),
+                      label: const Text('Edit Event'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFFF6600),
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey[400]),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
