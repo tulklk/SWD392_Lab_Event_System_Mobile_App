@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../domain/models/event.dart';
 import '../auth/auth_controller.dart';
@@ -158,6 +159,35 @@ class _EventCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Event Image
+              if (event.imageUrl != null && event.imageUrl!.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: CachedNetworkImage(
+                    imageUrl: event.imageUrl!,
+                    width: double.infinity,
+                    height: 180,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      height: 180,
+                      color: Colors.grey[200],
+                      child: const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      height: 180,
+                      color: Colors.grey[200],
+                      child: const Icon(
+                        Icons.image_not_supported,
+                        color: Colors.grey,
+                        size: 48,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               Row(
                 children: [
                   Container(
@@ -277,6 +307,24 @@ class _EventCard extends StatelessWidget {
                   ],
                 ],
               ),
+              // Capacity
+              if (event.capacity != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.people, size: 16, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Capacity: ${event.capacity} people',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if (onEdit != null) ...[
                 const SizedBox(height: 12),
                 const Divider(),

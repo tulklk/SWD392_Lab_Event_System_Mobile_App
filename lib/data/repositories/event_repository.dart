@@ -28,30 +28,53 @@ class EventRepository {
     String? location,
     bool visibility = true,
     int status = 1, // 0: draft, 1: active, 2: cancelled
+    String? recurrenceRule,
+    int? capacity,
+    String? imageUrl,
+    String? roomId,
+    List<String>? roomSlotIds,
   }) async {
     try {
       final now = DateTime.now();
       final eventId = _uuid.v4();
       
+      final eventData = {
+        'Id': eventId,
+        'Title': title,
+        'Description': description,
+        'StartDate': start.toIso8601String(),
+        'EndDate': end.toIso8601String(),
+        'CreatedBy': createdBy,
+        'Location': location,
+        'Visibility': visibility,
+        'Status': status,
+        'CreatedAt': now.toIso8601String(),
+        'LastUpdatedAt': now.toIso8601String(),
+      };
+
+      // Add optional fields if provided
+      if (recurrenceRule != null) {
+        eventData['RecurrenceRule'] = recurrenceRule;
+      }
+      if (capacity != null) {
+        eventData['Capacity'] = capacity;
+      }
+      if (imageUrl != null) {
+        eventData['ImageUrl'] = imageUrl;
+      }
+
+      // Note: roomId and roomSlotIds are not stored in tbl_events table
+      // They should be stored in a separate linking table (e.g., tbl_event_room_slots)
+      // This would require additional API calls or a separate repository method
+      
       final response = await _supabase
           .from('tbl_events')
-          .insert({
-            'Id': eventId,
-            'Title': title,
-            'Description': description,
-            'StartDate': start.toIso8601String(),
-            'EndDate': end.toIso8601String(),
-            'CreatedBy': createdBy,
-            'Location': location,
-            'Visibility': visibility,
-            'Status': status,
-            'CreatedAt': now.toIso8601String(),
-            'LastUpdatedAt': now.toIso8601String(),
-          })
+          .insert(eventData)
           .select()
           .single();
 
       final event = Event.fromJson(response as Map<String, dynamic>);
+      
       return Success(event);
     } catch (e) {
       return Failure('Failed to create event: $e');
@@ -188,10 +211,15 @@ class EventRepository {
   // Update event
   Future<Result<Event>> updateEvent(Event event) async {
     try {
+      // Get JSON data and remove Location and RecurrenceRule fields (they don't exist in database)
+      final jsonData = event.toJson();
+      jsonData.remove('Location');
+      jsonData.remove('RecurrenceRule');
+      
       final response = await _supabase
           .from('tbl_events')
           .update({
-            ...event.toJson(),
+            ...jsonData,
             'LastUpdatedAt': DateTime.now().toIso8601String(),
           })
           .eq('Id', event.id)

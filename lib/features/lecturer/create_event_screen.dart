@@ -2,8 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:io';
 import '../../data/repositories/event_repository.dart';
+import '../../data/repositories/room_repository.dart';
+import '../../data/repositories/room_slot_repository.dart';
+import '../../data/repositories/booking_repository.dart';
 import '../../domain/models/event.dart';
+import '../../domain/models/room.dart';
+import '../../domain/models/room_slot.dart';
+import '../../domain/models/booking.dart';
 import '../auth/auth_controller.dart';
 
 class CreateEventScreen extends ConsumerStatefulWidget {
@@ -22,7 +31,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _locationController = TextEditingController();
   final _capacityController = TextEditingController();
   
   DateTime? _startDate;
@@ -35,13 +43,154 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   bool _isLoading = false;
   bool _isSaving = false;
   Event? _existingEvent;
+  
+  // Image handling
+  File? _selectedImage;
+  final ImagePicker _imagePicker = ImagePicker();
+
+  // Room and Slot selection
+  final RoomRepository _roomRepository = RoomRepository();
+  final RoomSlotRepository _roomSlotRepository = RoomSlotRepository();
+  final BookingRepository _bookingRepository = BookingRepository();
+  
+  List<Room> _rooms = [];
+  List<RoomSlot> _availableSlots = [];
+  List<Booking> _existingBookings = [];
+  Room? _selectedRoom;
+  Set<String> _selectedSlotIds = {}; // Set để lưu các slot IDs đã chọn
+  
+  bool _isLoadingRooms = false;
+  bool _isLoadingSlots = false;
 
   @override
   void initState() {
     super.initState();
+    _loadRooms();
     if (widget.eventId != null) {
       _loadEvent();
     }
+  }
+
+  Future<void> _loadRooms() async {
+    setState(() => _isLoadingRooms = true);
+    final result = await _roomRepository.getActiveRooms();
+    
+    if (result.isSuccess && mounted) {
+      setState(() {
+        _rooms = result.data!;
+        _isLoadingRooms = false;
+      });
+    } else {
+      setState(() => _isLoadingRooms = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.error ?? 'Failed to load rooms'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadAvailableSlots() async {
+    if (_selectedRoom == null || _startDate == null) {
+      setState(() {
+        _availableSlots = [];
+        _selectedSlotIds.clear();
+      });
+      return;
+    }
+    
+    setState(() => _isLoadingSlots = true);
+    
+    // Get day of week (1 = Monday, 7 = Sunday)
+    final dayOfWeek = _startDate!.weekday;
+    
+    // Load all slots for this room on this day of week
+    final slotsResult = await _roomSlotRepository.getSlotsByRoomId(_selectedRoom!.id);
+    
+    if (slotsResult.isSuccess) {
+      final allSlots = slotsResult.data!
+          .where((slot) => slot.dayOfWeek == dayOfWeek)
+          .toList();
+      
+      // Load existing bookings for this room and date
+      final bookingsResult = await _bookingRepository.getBookingsForLab(_selectedRoom!.id);
+      
+      List<Booking> existingBookings = [];
+      if (bookingsResult.isSuccess) {
+        // Filter bookings for selected date
+        existingBookings = bookingsResult.data!.where((booking) {
+          final bookingDate = DateTime(
+            booking.startTime.year,
+            booking.startTime.month,
+            booking.startTime.day,
+          );
+          final selectedDateOnly = DateTime(
+            _startDate!.year,
+            _startDate!.month,
+            _startDate!.day,
+          );
+          return bookingDate.isAtSameMomentAs(selectedDateOnly) && 
+                 !booking.isCancelled && 
+                 !booking.isRejected;
+        }).toList();
+      }
+      
+      if (mounted) {
+        setState(() {
+          _availableSlots = allSlots;
+          _existingBookings = existingBookings;
+          _isLoadingSlots = false;
+        });
+      }
+    } else {
+      setState(() => _isLoadingSlots = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(slotsResult.error ?? 'Failed to load slots'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  bool _isSlotBooked(RoomSlot slot) {
+    if (_startDate == null) return false;
+    
+    // Check if this slot is already booked
+    return _existingBookings.any((booking) {
+      final slotStart = DateTime(
+        _startDate!.year,
+        _startDate!.month,
+        _startDate!.day,
+        slot.startTime.hour,
+        slot.startTime.minute,
+      );
+      final slotEnd = DateTime(
+        _startDate!.year,
+        _startDate!.month,
+        _startDate!.day,
+        slot.endTime.hour,
+        slot.endTime.minute,
+      );
+      
+      // Check if booking overlaps with slot
+      return (booking.startTime.isBefore(slotEnd) && booking.endTime.isAfter(slotStart));
+    });
+  }
+
+  void _toggleSlotSelection(String slotId) {
+    setState(() {
+      if (_selectedSlotIds.contains(slotId)) {
+        _selectedSlotIds.remove(slotId);
+      } else {
+        _selectedSlotIds.add(slotId);
+      }
+    });
   }
 
   Future<void> _loadEvent() async {
@@ -58,7 +207,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         _existingEvent = event;
         _titleController.text = event.title;
         _descriptionController.text = event.description ?? '';
-        _locationController.text = event.location ?? '';
+        _capacityController.text = event.capacity?.toString() ?? '';
         _isPublic = event.visibility;
         
         if (event.startDate != null) {
@@ -100,6 +249,10 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       setState(() {
         _startDate = date;
       });
+      // Reload slots if room is selected
+      if (_selectedRoom != null) {
+        _loadAvailableSlots();
+      }
     }
   }
 
@@ -170,6 +323,110 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     );
   }
 
+  Future<void> _pickImage() async {
+    try {
+      final ImageSource? source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        builder: (BuildContext context) {
+          return SafeArea(
+            child: Wrap(
+              children: <Widget>[
+                ListTile(
+                  leading: const Icon(Icons.photo_library),
+                  title: const Text('Chọn từ thư viện'),
+                  onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_camera),
+                  title: const Text('Chụp ảnh'),
+                  onTap: () => Navigator.of(context).pop(ImageSource.camera),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+
+      if (source != null) {
+        final XFile? image = await _imagePicker.pickImage(source: source);
+        if (image != null && mounted) {
+          setState(() {
+            _selectedImage = File(image.path);
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi khi chọn ảnh: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<String?> _uploadImageToSupabase() async {
+    if (_selectedImage == null) return null;
+
+    try {
+      // Check if user is authenticated
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session == null) {
+        throw Exception('Bạn cần đăng nhập để upload ảnh');
+      }
+
+      final fileExtension = _selectedImage!.path.split('.').last;
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExtension';
+      
+      // Upload to Supabase Storage with upsert to overwrite if exists
+      await Supabase.instance.client.storage
+          .from('event-images')
+          .upload(
+            fileName, 
+            _selectedImage!,
+            fileOptions: const FileOptions(
+              upsert: true,
+              contentType: 'image/*',
+            ),
+          );
+
+      // Get public URL
+      final imageUrl = Supabase.instance.client.storage
+          .from('event-images')
+          .getPublicUrl(fileName);
+
+      return imageUrl;
+    } catch (e) {
+      debugPrint('Error uploading image: $e');
+      
+      final errorString = e.toString();
+      
+      // Check for RLS policy error
+      if (errorString.contains('row-level security') || 
+          errorString.contains('violates row-level security policy') ||
+          errorString.contains('403') ||
+          errorString.contains('Unauthorized')) {
+        throw Exception(
+          'Lỗi: Bucket "event-images" chưa có quyền upload.\n\n'
+          'Vui lòng thiết lập RLS Policy trong Supabase:\n'
+          '1. Vào https://app.supabase.com → Project của bạn\n'
+          '2. Storage → event-images bucket → Policies\n'
+          '3. Click "New Policy" → "Create policy from scratch"\n'
+          '4. Đặt tên: "Allow authenticated upload"\n'
+          '5. Target roles: authenticated\n'
+          '6. Allowed operations: SELECT, INSERT, UPDATE\n'
+          '7. Policy definition:\n'
+          '   (bucket_id = \'event-images\'::text)\n'
+          '8. Save và thử lại'
+        );
+      }
+      
+      throw Exception('Không thể upload ảnh: $e');
+    }
+  }
+
   Future<void> _saveEvent({bool isDraft = false}) async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -210,16 +467,41 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
     final eventRepository = ref.read(eventRepositoryProvider);
 
+    // Upload image if selected
+    String? imageUrl;
+    try {
+      imageUrl = await _uploadImageToSupabase();
+    } catch (e) {
+      setState(() {
+        _isSaving = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     if (widget.eventId != null && _existingEvent != null) {
       // Update existing event
+      final capacityValue = _capacityController.text.trim().isEmpty 
+          ? null 
+          : int.tryParse(_capacityController.text.trim());
+      
       final updatedEvent = _existingEvent!.copyWith(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
-        location: _locationController.text.trim(),
+        location: null,
         startDate: startDateTime,
         endDate: endDateTime,
         visibility: _isPublic,
         status: isDraft ? 0 : 1,
+        capacity: capacityValue,
+        imageUrl: imageUrl,
       );
 
       final result = await eventRepository.updateEvent(updatedEvent);
@@ -248,15 +530,23 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       }
     } else {
       // Create new event
+      final capacityValue = _capacityController.text.trim().isEmpty 
+          ? null 
+          : int.tryParse(_capacityController.text.trim());
+      
       final result = await eventRepository.createEvent(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
-        location: _locationController.text.trim(),
+        location: null,
         start: startDateTime,
         end: endDateTime,
         createdBy: currentUser.id,
         visibility: _isPublic,
         status: isDraft ? 0 : 1,
+        capacity: capacityValue,
+        imageUrl: imageUrl,
+        roomId: _selectedRoom?.id,
+        roomSlotIds: _selectedSlotIds.isNotEmpty ? _selectedSlotIds.toList() : null,
       );
 
       setState(() {
@@ -351,24 +641,328 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                       },
                     ),
 
+                    const SizedBox(height: 24),
+                    const Divider(),
                     const SizedBox(height: 16),
 
-                    // Location
-                    TextFormField(
-                      controller: _locationController,
-                      decoration: const InputDecoration(
-                        labelText: 'Location *',
-                        hintText: 'Building A, Floor 3, Room 301',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.location_on),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter location';
-                        }
-                        return null;
-                      },
+                    // Room Selection
+                    Text(
+                      'Select Room',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
+                    const SizedBox(height: 8),
+                    _isLoadingRooms
+                        ? Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey[300]!),
+                            ),
+                            child: const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          )
+                        : Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey[300]!),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<Room>(
+                                value: _selectedRoom,
+                                hint: const Text(
+                                  'Select a room (optional)',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                isExpanded: true,
+                                selectedItemBuilder: (BuildContext context) {
+                                  return _rooms.map<Widget>((Room room) {
+                                    return Container(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        room.name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    );
+                                  }).toList();
+                                },
+                                onChanged: (Room? newValue) {
+                                  setState(() {
+                                    _selectedRoom = newValue;
+                                    _selectedSlotIds.clear();
+                                  });
+                                  if (_startDate != null) {
+                                    _loadAvailableSlots();
+                                  }
+                                },
+                                items: _rooms.map<DropdownMenuItem<Room>>((Room room) {
+                                  return DropdownMenuItem<Room>(
+                                    value: room,
+                                    child: Container(
+                                      constraints: const BoxConstraints(maxHeight: 56),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            room.name,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '${room.capacity} seats',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey[600],
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+
+                    // Room Slots Selection
+                    if (_selectedRoom != null && _startDate != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Available Time Slots (${_startDate != null ? dateFormat.format(_startDate!) : ""})',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      _isLoadingSlots
+                          ? Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey[300]!),
+                              ),
+                              child: const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            )
+                          : _availableSlots.isEmpty
+                              ? Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange[50],
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.orange[200]!),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.info_outline, color: Colors.orange[700]),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          'No available slots for this room on ${dateFormat.format(_startDate!)}',
+                                          style: TextStyle(color: Colors.orange[900]),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.grey[300]!),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey[50],
+                                          borderRadius: const BorderRadius.only(
+                                            topLeft: Radius.circular(8),
+                                            topRight: Radius.circular(8),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.info_outline, size: 16, color: Colors.grey[600]),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'Select one or more time slots for your event',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[700],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      ..._availableSlots.map((slot) {
+                                        final isBooked = _isSlotBooked(slot);
+                                        final isSelected = _selectedSlotIds.contains(slot.id);
+                                        final timeFormat = DateFormat('HH:mm');
+                                        
+                                        return InkWell(
+                                          onTap: isBooked ? null : () => _toggleSlotSelection(slot.id),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                            decoration: BoxDecoration(
+                                              color: isSelected
+                                                  ? Colors.blue[50]
+                                                  : isBooked
+                                                      ? Colors.red[50]
+                                                      : Colors.white,
+                                              border: Border(
+                                                bottom: BorderSide(color: Colors.grey[200]!),
+                                                left: BorderSide(
+                                                  color: isSelected
+                                                      ? Colors.blue
+                                                      : Colors.transparent,
+                                                  width: 3,
+                                                ),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Checkbox(
+                                                  value: isSelected,
+                                                  onChanged: isBooked
+                                                      ? null
+                                                      : (value) => _toggleSlotSelection(slot.id),
+                                                ),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        '${slot.dayName}',
+                                                        style: TextStyle(
+                                                          fontWeight: FontWeight.w600,
+                                                          color: isBooked ? Colors.grey : null,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      Row(
+                                                        children: [
+                                                          Icon(
+                                                            Icons.access_time,
+                                                            size: 14,
+                                                            color: isBooked
+                                                                ? Colors.red[400]
+                                                                : Colors.grey[600],
+                                                          ),
+                                                          const SizedBox(width: 4),
+                                                          Text(
+                                                            '${timeFormat.format(slot.startTime)} - ${timeFormat.format(slot.endTime)}',
+                                                            style: TextStyle(
+                                                              fontSize: 13,
+                                                              color: isBooked
+                                                                  ? Colors.red[700]
+                                                                  : Colors.grey[700],
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                if (isBooked)
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.red[100],
+                                                      borderRadius: BorderRadius.circular(4),
+                                                    ),
+                                                    child: Text(
+                                                      'Booked',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.red[900],
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ],
+                                  ),
+                                ),
+                      if (_selectedSlotIds.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.green[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.green[200]!),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.check_circle, color: Colors.green[700], size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${_selectedSlotIds.length} slot(s) selected',
+                                  style: TextStyle(
+                                    color: Colors.green[900],
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ] else if (_selectedRoom != null && _startDate == null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Please select start date to view available slots',
+                                style: TextStyle(color: Colors.blue[900]),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
                     const SizedBox(height: 24),
                     const Divider(),
@@ -446,6 +1040,99 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                           ),
                         ),
                       ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Capacity
+                    TextFormField(
+                      controller: _capacityController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Capacity (optional)',
+                        hintText: 'e.g. 50',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.people),
+                      ),
+                      validator: (value) {
+                        if (value != null && value.trim().isNotEmpty) {
+                          final capacity = int.tryParse(value.trim());
+                          if (capacity == null || capacity <= 0) {
+                            return 'Please enter a valid capacity number';
+                          }
+                        }
+                        return null;
+                      },
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Image Picker
+                    Text(
+                      'Event Image (optional)',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: _pickImage,
+                      child: Container(
+                        width: double.infinity,
+                        height: 200,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: _selectedImage != null
+                            ? Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.file(
+                                      _selectedImage!,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.5),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.edit,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.add_photo_alternate,
+                                    size: 48,
+                                    color: Colors.grey[400],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Chọn ảnh hoặc chụp ảnh',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
                     ),
 
                     const SizedBox(height: 24),
@@ -529,7 +1216,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _locationController.dispose();
     _capacityController.dispose();
     super.dispose();
   }

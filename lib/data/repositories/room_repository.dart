@@ -63,10 +63,7 @@ class RoomRepository {
   // Create new room (Lecturer/Admin only)
   Future<Result<Room>> createRoom({
     required String name,
-    String? description,
-    String? location,
     required int capacity,
-    String? imageUrl,
   }) async {
     try {
       final now = DateTime.now();
@@ -75,11 +72,8 @@ class RoomRepository {
           .from('tbl_rooms')
           .insert({
             'Name': name,
-            'Description': description,
-            'Location': location,
             'Capacity': capacity,
             'Status': 1,
-            'ImageUrl': imageUrl,
             'CreatedAt': now.toIso8601String(),
             'LastUpdatedAt': now.toIso8601String(),
           })
@@ -97,11 +91,8 @@ class RoomRepository {
   Future<Result<Room>> updateRoom({
     required String roomId,
     String? name,
-    String? description,
-    String? location,
     int? capacity,
     int? status,
-    String? imageUrl,
   }) async {
     try {
       final updateData = <String, dynamic>{
@@ -109,11 +100,8 @@ class RoomRepository {
       };
 
       if (name != null) updateData['Name'] = name;
-      if (description != null) updateData['Description'] = description;
-      if (location != null) updateData['Location'] = location;
       if (capacity != null) updateData['Capacity'] = capacity;
       if (status != null) updateData['Status'] = status;
-      if (imageUrl != null) updateData['ImageUrl'] = imageUrl;
 
       final response = await _supabase
           .from('tbl_rooms')
@@ -143,13 +131,13 @@ class RoomRepository {
     }
   }
 
-  // Search rooms by name or location
+  // Search rooms by name
   Future<Result<List<Room>>> searchRooms(String query) async {
     try {
       final response = await _supabase
           .from('tbl_rooms')
           .select()
-          .or('Name.ilike.%$query%,Location.ilike.%$query%')
+          .ilike('Name', '%$query%')
           .eq('Status', 1)
           .order('Name', ascending: true);
 

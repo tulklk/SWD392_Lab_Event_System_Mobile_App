@@ -12,9 +12,7 @@ class LabRepository {
 
   Future<Result<Lab>> createLab({
     required String name,
-    required String location,
-    required int capacity,
-    required String description,
+    String? location,
     required String roomId,
   }) async {
     try {
@@ -23,8 +21,6 @@ class LabRepository {
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         name: name,
         location: location,
-        capacity: capacity,
-        description: description,
         createdAt: now,
         lastUpdatedAt: now,
         roomId: roomId,
