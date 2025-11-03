@@ -251,7 +251,7 @@ class _BookingFormScreenState extends ConsumerState<BookingFormScreen> {
                                 children: [
                                   Text(room.name),
                                   Text(
-                                    room.location ?? 'No location',
+                                    '${room.capacity} seats',
                                     style: const TextStyle(
                                       fontSize: 12,
                                       color: Color(0xFF64748B),

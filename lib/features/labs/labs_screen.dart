@@ -109,8 +109,7 @@ class _LabsScreenState extends ConsumerState<LabsScreen>
         // Search filter
         if (_searchQuery.isNotEmpty) {
           final nameMatch = room.name.toLowerCase().contains(_searchQuery.toLowerCase());
-          final locationMatch = room.location?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false;
-          if (!nameMatch && !locationMatch) return false;
+          if (!nameMatch) return false;
         }
 
         // Capacity filter
@@ -477,38 +476,28 @@ class _LabsScreenState extends ConsumerState<LabsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Room image or placeholder
+          // Room image placeholder
           Container(
             width: double.infinity,
             height: 150,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
-              gradient: room.imageUrl != null
-                  ? null
-                  : LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        const Color(0xFF1A73E8).withOpacity(0.8),
-                        const Color(0xFFFF6600).withOpacity(0.6),
-                      ],
-                    ),
-              image: room.imageUrl != null
-                  ? DecorationImage(
-                      image: NetworkImage(room.imageUrl!),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF1A73E8).withOpacity(0.8),
+                  const Color(0xFFFF6600).withOpacity(0.6),
+                ],
+              ),
             ),
-            child: room.imageUrl == null
-                ? const Center(
-                    child: Icon(
-                      Icons.meeting_room,
-                      size: 40,
-                      color: Colors.white,
-                    ),
-                  )
-                : null,
+            child: const Center(
+              child: Icon(
+                Icons.meeting_room,
+                size: 40,
+                color: Colors.white,
+              ),
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -544,30 +533,6 @@ class _LabsScreenState extends ConsumerState<LabsScreen>
           ),
           const SizedBox(height: 12),
 
-          // Location
-          if (room.location != null) ...[
-            Row(
-              children: [
-                const Icon(
-                  Icons.location_on,
-                  size: 16,
-                  color: Color(0xFF64748B),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    room.location!,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-          ],
-
           // Capacity
           Row(
             children: [
@@ -586,21 +551,7 @@ class _LabsScreenState extends ConsumerState<LabsScreen>
               ),
             ],
           ),
-          const SizedBox(height: 12),
-
-          // Description
-          if (room.description != null) ...[
-            Text(
-              room.description!,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF64748B),
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 16),
-          ],
+          const SizedBox(height: 16),
 
           // Action buttons
           Row(
@@ -832,8 +783,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                   const SizedBox(height: 16),
                   
                   // Room Info
-                  if (widget.room.location != null)
-                    _buildDetailRow(Icons.location_on, 'Location', widget.room.location!),
                   _buildDetailRow(
                     Icons.people,
                     'Capacity',
@@ -844,27 +793,6 @@ class _RoomDetailsSheetState extends State<_RoomDetailsSheet> {
                     'Status',
                     widget.room.isActive ? 'Active' : 'Maintenance',
                   ),
-                  
-                  // Description
-                  if (widget.room.description != null) ...[
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Description',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      widget.room.description!,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
                   
                   // Room Slots Section
                   const SizedBox(height: 24),

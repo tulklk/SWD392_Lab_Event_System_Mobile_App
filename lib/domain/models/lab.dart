@@ -2,22 +2,18 @@
 class Lab {
   final String id;
   final String name;
-  final String? description;
   final String? location;
   final DateTime createdAt;
   final DateTime lastUpdatedAt;
-  final int capacity;
   final int status; // 0: inactive, 1: active, 2: maintenance
   final String roomId;
 
   Lab({
     required this.id,
     required this.name,
-    this.description,
     this.location,
     required this.createdAt,
     required this.lastUpdatedAt,
-    required this.capacity,
     this.status = 1,
     required this.roomId,
   });
@@ -25,22 +21,18 @@ class Lab {
   Lab copyWith({
     String? id,
     String? name,
-    String? description,
     String? location,
     DateTime? createdAt,
     DateTime? lastUpdatedAt,
-    int? capacity,
     int? status,
     String? roomId,
   }) {
     return Lab(
       id: id ?? this.id,
       name: name ?? this.name,
-      description: description ?? this.description,
       location: location ?? this.location,
       createdAt: createdAt ?? this.createdAt,
       lastUpdatedAt: lastUpdatedAt ?? this.lastUpdatedAt,
-      capacity: capacity ?? this.capacity,
       status: status ?? this.status,
       roomId: roomId ?? this.roomId,
     );
@@ -50,11 +42,9 @@ class Lab {
     return Lab(
       id: json['Id'] as String,
       name: json['Name'] as String,
-      description: json['Description'] as String?,
       location: json['Location'] as String?,
       createdAt: DateTime.parse(json['CreatedAt'] as String),
       lastUpdatedAt: DateTime.parse(json['LastUpdatedAt'] as String),
-      capacity: json['Capacity'] as int,
       status: json['Status'] as int? ?? 1,
       roomId: json['RoomId'] as String,
     );
@@ -64,11 +54,9 @@ class Lab {
     return {
       'Id': id,
       'Name': name,
-      'Description': description,
       'Location': location,
       'CreatedAt': createdAt.toIso8601String(),
       'LastUpdatedAt': lastUpdatedAt.toIso8601String(),
-      'Capacity': capacity,
       'Status': status,
       'RoomId': roomId,
     };
@@ -79,7 +67,7 @@ class Lab {
 
   @override
   String toString() {
-    return 'Lab(id: $id, name: $name, location: $location, capacity: $capacity, status: $status)';
+    return 'Lab(id: $id, name: $name, location: $location, status: $status, roomId: $roomId)';
   }
 
   @override

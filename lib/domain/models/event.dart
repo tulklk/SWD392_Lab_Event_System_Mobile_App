@@ -12,6 +12,8 @@ class Event {
   final String? location;
   final DateTime? startDate;
   final int status; // 0: draft, 1: active, 2: cancelled
+  final int? capacity; // Maximum number of participants
+  final String? imageUrl; // URL to event image
 
   Event({
     required this.id,
@@ -26,6 +28,8 @@ class Event {
     this.location,
     this.startDate,
     this.status = 1,
+    this.capacity,
+    this.imageUrl,
   });
 
   Event copyWith({
@@ -41,6 +45,8 @@ class Event {
     String? location,
     DateTime? startDate,
     int? status,
+    int? capacity,
+    String? imageUrl,
   }) {
     return Event(
       id: id ?? this.id,
@@ -55,6 +61,8 @@ class Event {
       location: location ?? this.location,
       startDate: startDate ?? this.startDate,
       status: status ?? this.status,
+      capacity: capacity ?? this.capacity,
+      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 
@@ -76,6 +84,8 @@ class Event {
           ? DateTime.parse(json['StartDate'] as String)
           : null,
       status: json['Status'] as int? ?? 1,
+      capacity: json['Capacity'] as int?,
+      imageUrl: json['ImageUrl'] as String?,
     );
   }
 
@@ -93,6 +103,8 @@ class Event {
       'Location': location,
       'StartDate': startDate?.toIso8601String(),
       'Status': status,
+      'Capacity': capacity,
+      'ImageUrl': imageUrl,
     };
   }
 

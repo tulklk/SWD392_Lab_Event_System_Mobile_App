@@ -38,22 +38,16 @@ class SeedData {
       {
         'name': 'Lab A - AI & Machine Learning',
         'location': 'Building A, Floor 3, Room 301',
-        'capacity': 30,
-        'description': 'Advanced AI and Machine Learning laboratory with high-performance computing resources.',
         'roomId': 'room_1',
       },
       {
         'name': 'Lab B - Robotics & IoT',
         'location': 'Building B, Floor 2, Room 205',
-        'capacity': 25,
-        'description': 'Robotics and Internet of Things laboratory equipped with sensors and robotic kits.',
         'roomId': 'room_2',
       },
       {
         'name': 'Lab C - Software Development',
         'location': 'Building C, Floor 1, Room 101',
-        'capacity': 40,
-        'description': 'Software development laboratory with modern development tools and collaborative spaces.',
         'roomId': 'room_3',
       },
     ];
@@ -61,9 +55,7 @@ class SeedData {
     for (final labData in labs) {
       await labRepository.createLab(
         name: labData['name'] as String,
-        location: labData['location'] as String,
-        capacity: labData['capacity'] as int,
-        description: labData['description'] as String,
+        location: labData['location'] as String?,
         roomId: labData['roomId'] as String,
       );
     }
