@@ -109,16 +109,6 @@ class _EventRegistrationsScreenState extends ConsumerState<EventRegistrationsScr
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
-                        const SizedBox(width: 4),
-                        Text(
-                          event.location ?? 'No location',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
                         Icon(Icons.calendar_today, size: 14, color: Colors.grey[600]),
                         const SizedBox(width: 4),
                         Text(

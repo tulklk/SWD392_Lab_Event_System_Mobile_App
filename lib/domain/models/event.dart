@@ -5,11 +5,9 @@ class Event {
   final String title;
   final String? description;
   final bool visibility; // true: public, false: private
-  final String? recurrenceRule; // iCal format
   final DateTime createdAt;
   final DateTime lastUpdatedAt;
   final DateTime? endDate;
-  final String? location;
   final DateTime? startDate;
   final int status; // 0: draft, 1: active, 2: cancelled
   final int? capacity; // Maximum number of participants
@@ -21,11 +19,9 @@ class Event {
     required this.title,
     this.description,
     this.visibility = true,
-    this.recurrenceRule,
     required this.createdAt,
     required this.lastUpdatedAt,
     this.endDate,
-    this.location,
     this.startDate,
     this.status = 1,
     this.capacity,
@@ -38,11 +34,9 @@ class Event {
     String? title,
     String? description,
     bool? visibility,
-    String? recurrenceRule,
     DateTime? createdAt,
     DateTime? lastUpdatedAt,
     DateTime? endDate,
-    String? location,
     DateTime? startDate,
     int? status,
     int? capacity,
@@ -54,11 +48,9 @@ class Event {
       title: title ?? this.title,
       description: description ?? this.description,
       visibility: visibility ?? this.visibility,
-      recurrenceRule: recurrenceRule ?? this.recurrenceRule,
       createdAt: createdAt ?? this.createdAt,
       lastUpdatedAt: lastUpdatedAt ?? this.lastUpdatedAt,
       endDate: endDate ?? this.endDate,
-      location: location ?? this.location,
       startDate: startDate ?? this.startDate,
       status: status ?? this.status,
       capacity: capacity ?? this.capacity,
@@ -73,13 +65,11 @@ class Event {
       title: json['Title'] as String,
       description: json['Description'] as String?,
       visibility: json['Visibility'] as bool? ?? true,
-      recurrenceRule: json['RecurrenceRule'] as String?,
       createdAt: DateTime.parse(json['CreatedAt'] as String),
       lastUpdatedAt: DateTime.parse(json['LastUpdatedAt'] as String),
       endDate: json['EndDate'] != null
           ? DateTime.parse(json['EndDate'] as String)
           : null,
-      location: json['Location'] as String?,
       startDate: json['StartDate'] != null
           ? DateTime.parse(json['StartDate'] as String)
           : null,
@@ -96,11 +86,9 @@ class Event {
       'Title': title,
       'Description': description,
       'Visibility': visibility,
-      'RecurrenceRule': recurrenceRule,
       'CreatedAt': createdAt.toIso8601String(),
       'LastUpdatedAt': lastUpdatedAt.toIso8601String(),
       'EndDate': endDate?.toIso8601String(),
-      'Location': location,
       'StartDate': startDate?.toIso8601String(),
       'Status': status,
       'Capacity': capacity,
@@ -120,7 +108,7 @@ class Event {
 
   @override
   String toString() {
-    return 'Event(id: $id, title: $title, location: $location, status: $status)';
+    return 'Event(id: $id, title: $title, status: $status)';
   }
 
   @override
