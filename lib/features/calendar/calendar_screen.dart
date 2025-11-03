@@ -498,14 +498,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     Text(event.description!),
                     const SizedBox(height: 12),
                   ],
-                  if (event.location != null) ...[
-                    const Text(
-                      'Location:',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(event.location!),
-                    const SizedBox(height: 12),
-                  ],
                   if (event.startDate != null && event.endDate != null) ...[
                     const Text(
                       'Time:',
@@ -587,16 +579,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     const SizedBox(height: 8),
                     Text(
                       '${_formatTime(event.startDate!)} - ${_formatTime(event.endDate!)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                  if (event.location != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      event.location!,
                       style: const TextStyle(
                         fontSize: 12,
                         color: Color(0xFF64748B),

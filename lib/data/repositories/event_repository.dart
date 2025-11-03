@@ -25,10 +25,8 @@ class EventRepository {
     required DateTime start,
     required DateTime end,
     required String createdBy,
-    String? location,
     bool visibility = true,
     int status = 1, // 0: draft, 1: active, 2: cancelled
-    String? recurrenceRule,
     int? capacity,
     String? imageUrl,
     String? roomId,
@@ -45,7 +43,6 @@ class EventRepository {
         'StartDate': start.toIso8601String(),
         'EndDate': end.toIso8601String(),
         'CreatedBy': createdBy,
-        'Location': location,
         'Visibility': visibility,
         'Status': status,
         'CreatedAt': now.toIso8601String(),
@@ -53,9 +50,7 @@ class EventRepository {
       };
 
       // Add optional fields if provided
-      if (recurrenceRule != null) {
-        eventData['RecurrenceRule'] = recurrenceRule;
-      }
+      // Note: Location and RecurrenceRule are not included as they don't exist in database schema
       if (capacity != null) {
         eventData['Capacity'] = capacity;
       }
@@ -145,24 +140,25 @@ class EventRepository {
   }
 
   // Get events for specific location
-  Future<Result<List<Event>>> getEventsForLocation(String location) async {
-    try {
-      final response = await _supabase
-          .from('tbl_events')
-          .select()
-          .eq('Status', 1) // active only
-          .eq('Location', location)
-          .order('StartDate', ascending: true);
-
-      final events = (response as List)
-          .map((json) => Event.fromJson(json as Map<String, dynamic>))
-          .toList();
-
-      return Success(events);
-    } catch (e) {
-      return Failure('Failed to get events for location: $e');
-    }
-  }
+  // NOTE: Removed because Location column doesn't exist in database
+  // Future<Result<List<Event>>> getEventsForLocation(String location) async {
+  //   try {
+  //     final response = await _supabase
+  //         .from('tbl_events')
+  //         .select()
+  //         .eq('Status', 1) // active only
+  //         .eq('Location', location)
+  //         .order('StartDate', ascending: true);
+  //
+  //     final events = (response as List)
+  //         .map((json) => Event.fromJson(json as Map<String, dynamic>))
+  //         .toList();
+  //
+  //     return Success(events);
+  //   } catch (e) {
+  //     return Failure('Failed to get events for location: $e');
+  //   }
+  // }
 
   // Get upcoming events (from now onwards)
   Future<Result<List<Event>>> getUpcomingEvents() async {
@@ -211,10 +207,8 @@ class EventRepository {
   // Update event
   Future<Result<Event>> updateEvent(Event event) async {
     try {
-      // Get JSON data and remove Location and RecurrenceRule fields (they don't exist in database)
+      // Get JSON data (Location and RecurrenceRule are already removed from model)
       final jsonData = event.toJson();
-      jsonData.remove('Location');
-      jsonData.remove('RecurrenceRule');
       
       final response = await _supabase
           .from('tbl_events')

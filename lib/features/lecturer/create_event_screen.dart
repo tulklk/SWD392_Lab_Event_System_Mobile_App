@@ -495,7 +495,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       final updatedEvent = _existingEvent!.copyWith(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
-        location: null,
         startDate: startDateTime,
         endDate: endDateTime,
         visibility: _isPublic,
@@ -537,7 +536,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       final result = await eventRepository.createEvent(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
-        location: null,
         start: startDateTime,
         end: endDateTime,
         createdBy: currentUser.id,

@@ -330,7 +330,7 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
                   context,
                   title: event.title,
                   time: _formatEventTime(event),
-                  location: event.location ?? 'No location',
+                  location: '',
                   participants: '',
                   status: _getEventStatus(event),
                   statusColor: _getEventStatusColor(event),
@@ -527,26 +527,6 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
                       ),
                     ],
                   ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on,
-                      size: 16,
-                      color: Color(0xFF64748B),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        location,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),

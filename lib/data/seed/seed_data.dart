@@ -65,16 +65,8 @@ class SeedData {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     
-    // Event locations
-    final locations = [
-      'Building A, Floor 3, Room 301',
-      'Building B, Floor 2, Room 205',
-      'Building C, Floor 1, Room 101',
-    ];
-    
     final events = [
       {
-        'location': locations[0],
         'title': 'AI Workshop: Introduction to Neural Networks',
         'description': 'Learn the fundamentals of neural networks and deep learning.',
         'start': today.add(const Duration(hours: 9)),
@@ -82,7 +74,6 @@ class SeedData {
         'createdBy': 'admin',
       },
       {
-        'location': locations[1],
         'title': 'Robotics Demo: Arduino Programming',
         'description': 'Hands-on session on Arduino programming for robotics projects.',
         'start': today.add(const Duration(hours: 14)),
@@ -90,7 +81,6 @@ class SeedData {
         'createdBy': 'admin',
       },
       {
-        'location': locations[2],
         'title': 'Flutter Development Workshop',
         'description': 'Build mobile applications with Flutter framework.',
         'start': today.add(const Duration(days: 1, hours: 10)),
@@ -98,7 +88,6 @@ class SeedData {
         'createdBy': 'admin',
       },
       {
-        'location': locations[0],
         'title': 'Machine Learning Project Presentation',
         'description': 'Students present their ML projects and research findings.',
         'start': today.add(const Duration(days: 2, hours: 15)),
@@ -106,7 +95,6 @@ class SeedData {
         'createdBy': 'admin',
       },
       {
-        'location': locations[1],
         'title': 'IoT Sensors Workshop',
         'description': 'Learn about various IoT sensors and their applications.',
         'start': today.add(const Duration(days: 3, hours: 9)),
@@ -122,7 +110,6 @@ class SeedData {
         start: eventData['start'] as DateTime,
         end: eventData['end'] as DateTime,
         createdBy: eventData['createdBy'] as String,
-        location: eventData['location'] as String,
       );
     }
   }
