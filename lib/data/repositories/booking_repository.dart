@@ -338,4 +338,77 @@ class BookingRepository {
       return Failure('Failed to get past bookings: $e');
     }
   }
+
+  // Check if user already booked an event
+  Future<Result<bool>> hasUserBookedEvent(String eventId, String userId) async {
+    try {
+      final response = await _supabase
+          .from('tbl_bookings')
+          .select()
+          .eq('EventId', eventId)
+          .eq('UserId', userId)
+          .maybeSingle();
+
+      return Success(response != null);
+    } catch (e) {
+      return Failure('Failed to check event booking: $e');
+    }
+  }
+
+  // Get bookings for an event (to check capacity)
+  Future<Result<List<Booking>>> getBookingsForEvent(String eventId) async {
+    try {
+      final response = await _supabase
+          .from('tbl_bookings')
+          .select()
+          .eq('EventId', eventId)
+          .order('CreatedAt', ascending: false);
+
+      final bookings = (response as List)
+          .map((json) => Booking.fromJson(json as Map<String, dynamic>))
+          .toList();
+
+      return Success(bookings);
+    } catch (e) {
+      return Failure('Failed to get bookings for event: $e');
+    }
+  }
+
+  // Create booking for an event
+  Future<Result<Booking>> createEventBooking({
+    required String eventId,
+    required String roomId,
+    required String userId,
+    required DateTime startTime,
+    required DateTime endTime,
+    String? notes,
+  }) async {
+    try {
+      final now = DateTime.now();
+      final bookingId = _uuid.v4();
+      
+      final response = await _supabase
+          .from('tbl_bookings')
+          .insert({
+            'Id': bookingId,
+            'UserId': userId,
+            'RoomId': roomId,
+            'EventId': eventId,
+            'StartTime': startTime.toIso8601String(),
+            'EndTime': endTime.toIso8601String(),
+            'Purpose': 'Event Registration',
+            'Status': 0, // pending
+            'Notes': notes,
+            'CreatedAt': now.toIso8601String(),
+            'LastUpdatedAt': now.toIso8601String(),
+          })
+          .select()
+          .single();
+
+      final booking = Booking.fromJson(response as Map<String, dynamic>);
+      return Success(booking);
+    } catch (e) {
+      return Failure('Failed to create event booking: $e');
+    }
+  }
 }

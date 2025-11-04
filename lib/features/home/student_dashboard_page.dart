@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../auth/auth_controller.dart';
 import '../../domain/models/event.dart';
+import '../../domain/models/room.dart';
+import '../../domain/models/lab.dart';
 import '../../data/repositories/event_repository.dart';
+import '../../data/repositories/room_repository.dart';
+import '../../data/repositories/lab_repository.dart';
 
 class StudentDashboardPage extends ConsumerStatefulWidget {
   final Function(int)? onTabChange;
@@ -228,12 +234,12 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
                 Expanded(
                   child: _buildQuickActionCard(
                     context,
-                    icon: Icons.visibility,
+                    icon: Icons.event,
                     iconColor: const Color(0xFF1A73E8),
                     iconBackgroundColor: const Color(0xFF1A73E8).withOpacity(0.1),
-                    title: 'View Labs',
+                    title: 'View Events',
                     onTap: () {
-                      // Switch to Labs tab (index 2 for student)
+                      // Switch to Events tab (index 2 for student)
                       widget.onTabChange?.call(2);
                     },
                   ),
@@ -326,15 +332,7 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
             else
               ..._upcomingEvents.take(3).map((event) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _buildEventCard(
-                  context,
-                  title: event.title,
-                  time: _formatEventTime(event),
-                  location: '',
-                  participants: '',
-                  status: _getEventStatus(event),
-                  statusColor: _getEventStatusColor(event),
-                ),
+                child: _StudentEventCard(event: event),
               )).toList(),
             const SizedBox(height: 24),
 
@@ -438,102 +436,6 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
     );
   }
 
-  Widget _buildEventCard(
-    BuildContext context, {
-    required String title,
-    required String time,
-    required String location,
-    required String participants,
-    required String status,
-    required Color statusColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFFF6600),
-          width: 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 4,
-            height: 60,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFF6600),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        status,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (time.isNotEmpty)
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.access_time,
-                        size: 16,
-                        color: Color(0xFF64748B),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        time,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildStatusCard(
     BuildContext context, {
@@ -574,6 +476,410 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Event Card Widget for Student Dashboard (similar to Lecturer but without Edit/Delete)
+class _StudentEventCard extends ConsumerStatefulWidget {
+  final Event event;
+
+  const _StudentEventCard({
+    required this.event,
+  });
+
+  @override
+  ConsumerState<_StudentEventCard> createState() => _StudentEventCardState();
+}
+
+class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
+  Room? _room;
+  Lab? _lab;
+  bool _isLoadingRoomLab = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRoomAndLab();
+  }
+
+  Future<void> _loadRoomAndLab() async {
+    setState(() => _isLoadingRoomLab = true);
+    
+    try {
+      debugPrint('🔄 Loading room and lab for event: ${widget.event.id}');
+      final eventRepository = EventRepository();
+      final roomRepository = RoomRepository();
+      final labRepository = LabRepository();
+      
+      // Get roomId and labId for event
+      final infoResult = await eventRepository.getEventRoomAndLabInfo(widget.event.id);
+      
+      if (infoResult.isSuccess && infoResult.data != null) {
+        final roomId = infoResult.data!['roomId'];
+        final labId = infoResult.data!['labId'];
+        
+        // Load Room
+        if (roomId != null && roomId.isNotEmpty) {
+          final roomResult = await roomRepository.getRoomById(roomId);
+          if (roomResult.isSuccess && roomResult.data != null) {
+            if (mounted) {
+              setState(() => _room = roomResult.data);
+            }
+          }
+        }
+        
+        // Load Lab
+        if (labId != null && labId.isNotEmpty) {
+          final labResult = await labRepository.getLabById(labId);
+          if (labResult.isSuccess && labResult.data != null) {
+            if (mounted) {
+              setState(() => _lab = labResult.data);
+            }
+          } else {
+            // Try from Supabase if not in Hive
+            final labsResult = await labRepository.getLabsFromSupabase();
+            if (labsResult.isSuccess && labsResult.data != null) {
+              try {
+                final lab = labsResult.data!.firstWhere(
+                  (l) => l.id == labId,
+                );
+                if (mounted) {
+                  setState(() => _lab = lab);
+                }
+              } catch (e) {
+                debugPrint('Lab with id $labId not found in Supabase');
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading room/lab: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingRoomLab = false);
+      }
+    }
+  }
+
+  Color _getStatusColor(int status) {
+    switch (status) {
+      case 0:
+        return Colors.grey;
+      case 1:
+        return Colors.green;
+      case 2:
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getStatusIcon(int status) {
+    switch (status) {
+      case 0:
+        return Icons.edit_outlined;
+      case 1:
+        return Icons.check_circle_outline;
+      case 2:
+        return Icons.cancel_outlined;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  String _getStatusText(int status) {
+    switch (status) {
+      case 0:
+        return 'Draft';
+      case 1:
+        return 'Active';
+      case 2:
+        return 'Cancelled';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFormat = DateFormat('MMM dd, yyyy');
+    final timeFormat = DateFormat('HH:mm');
+
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey[200]!),
+      ),
+      child: InkWell(
+        onTap: () {
+          // Show event details dialog
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(widget.event.title),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.event.description != null) ...[
+                      const Text(
+                        'Description:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(widget.event.description!),
+                      const SizedBox(height: 12),
+                    ],
+                    if (widget.event.startDate != null && widget.event.endDate != null) ...[
+                      const Text(
+                        'Time:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text('${timeFormat.format(widget.event.startDate!)} - ${timeFormat.format(widget.event.endDate!)}'),
+                    ],
+                    if (_lab != null) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Lab:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(_lab!.name),
+                    ],
+                    if (_room != null) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Room:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(_room!.name),
+                    ],
+                    if (widget.event.capacity != null) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Capacity:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text('${widget.event.capacity} people'),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ],
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Event Image
+              if (widget.event.imageUrl != null && widget.event.imageUrl!.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: CachedNetworkImage(
+                    imageUrl: widget.event.imageUrl!,
+                    width: double.infinity,
+                    height: 180,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      height: 180,
+                      color: Colors.grey[200],
+                      child: const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      height: 180,
+                      color: Colors.grey[200],
+                      child: const Icon(
+                        Icons.image_not_supported,
+                        color: Colors.grey,
+                        size: 48,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(widget.event.status).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _getStatusIcon(widget.event.status),
+                          size: 14,
+                          color: _getStatusColor(widget.event.status),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _getStatusText(widget.event.status),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: _getStatusColor(widget.event.status),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  if (widget.event.visibility)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.public, size: 12, color: Colors.blue),
+                          SizedBox(width: 4),
+                          Text(
+                            'Public',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.blue,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                widget.event.title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (widget.event.description != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  widget.event.description!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    widget.event.startDate != null
+                        ? dateFormat.format(widget.event.startDate!)
+                        : 'No date',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  if (widget.event.startDate != null) ...[
+                    const SizedBox(width: 12),
+                    Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${timeFormat.format(widget.event.startDate!)} - ${widget.event.endDate != null ? timeFormat.format(widget.event.endDate!) : ''}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              // Lab and Room info
+              if (_lab != null || _room != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (_lab != null) ...[
+                      Icon(Icons.science, size: 16, color: Colors.orange[700]),
+                      const SizedBox(width: 4),
+                      Text(
+                        _lab!.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange[700],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (_room != null) ...[
+                        const SizedBox(width: 12),
+                        Icon(Icons.room, size: 16, color: Colors.blue[700]),
+                        const SizedBox(width: 4),
+                        Text(
+                          _room!.name,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue[700],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ] else if (_room != null) ...[
+                      Icon(Icons.room, size: 16, color: Colors.blue[700]),
+                      const SizedBox(width: 4),
+                      Text(
+                        _room!.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue[700],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+              // Capacity
+              if (widget.event.capacity != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.people, size: 16, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Capacity: ${widget.event.capacity} people',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

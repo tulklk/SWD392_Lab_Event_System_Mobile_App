@@ -50,16 +50,28 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _checkAndRefresh();
+    // Always refresh when dependencies change (e.g., when tab becomes visible)
+    final now = DateTime.now();
+    if (_lastRefreshTime == null || 
+        now.difference(_lastRefreshTime!).inSeconds > 2) {
+      debugPrint('🔄 My Bookings: Dependencies changed, refreshing...');
+      _refreshData();
+    }
   }
 
   void _checkAndRefresh() {
     final now = DateTime.now();
     if (_lastRefreshTime == null || 
-        now.difference(_lastRefreshTime!).inSeconds > 5) {
+        now.difference(_lastRefreshTime!).inSeconds > 2) {
       debugPrint('🔄 My Bookings: Checking for refresh...');
       _refreshData();
     }
+  }
+  
+  // Public method to refresh from outside
+  void refreshBookings() {
+    debugPrint('🔄 My Bookings: Manual refresh triggered');
+    _refreshData();
   }
 
   Future<void> _refreshData() async {
@@ -157,6 +169,13 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
             color: Color(0xFF1E293B),
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Color(0xFF1E293B)),
+            onPressed: _loadBookings,
+            tooltip: 'Refresh',
+          ),
+        ],
       ),
       body: DefaultTabController(
         length: 2,
