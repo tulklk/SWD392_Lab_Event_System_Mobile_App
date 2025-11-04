@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'student_dashboard_page.dart';
 import 'lecturer_dashboard_page.dart';
 import '../calendar/calendar_screen.dart';
+import '../events/student_events_screen.dart';
 import '../labs/labs_screen.dart';
 import '../bookings/my_bookings_screen.dart';
 import '../admin/admin_dashboard_screen.dart';
@@ -33,7 +34,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     List<NavigationDestination> destinations = [];
     
     if (isStudent) {
-      // Student: Only Home, Calendar, Labs, and My Bookings
+      // Student: Only Home, Calendar, Events, and My Bookings
       screens = [
         StudentDashboardPage(
           onTabChange: (index) {
@@ -43,8 +44,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           },
         ),
         const CalendarScreen(),
-        const LabsScreen(),
-        const MyBookingsScreen(),
+        const StudentEventsScreen(),
+        MyBookingsScreen(),
       ];
       destinations = [
         const NavigationDestination(
@@ -58,9 +59,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           label: 'Calendar',
         ),
         const NavigationDestination(
-          icon: Icon(Icons.science_rounded),
-          selectedIcon: Icon(Icons.science_rounded),
-          label: 'Labs',
+          icon: Icon(Icons.event_rounded),
+          selectedIcon: Icon(Icons.event_rounded),
+          label: 'Event',
         ),
         const NavigationDestination(
           icon: Icon(Icons.book_online_rounded),
@@ -420,6 +421,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           setState(() {
             _selectedIndex = index;
           });
+          
+          // My Bookings will auto-refresh via didChangeDependencies when tab becomes visible
+          if (isStudent && index == 3) {
+            debugPrint('🔄 Switched to My Bookings tab (index 3)');
+          }
         },
         destinations: destinations,
       ),
