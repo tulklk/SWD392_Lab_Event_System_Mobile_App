@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../data/repositories/event_repository.dart';
+import '../../data/repositories/room_repository.dart';
+import '../../data/repositories/lab_repository.dart';
 import '../../domain/models/event.dart';
+import '../../domain/models/room.dart';
+import '../../domain/models/lab.dart';
 import '../auth/auth_controller.dart';
 
 class LecturerEventsScreen extends ConsumerStatefulWidget {
@@ -197,7 +202,7 @@ class _LecturerEventsScreenState extends ConsumerState<LecturerEventsScreen> {
   }
 }
 
-class _EventCard extends StatelessWidget {
+class _EventCard extends ConsumerStatefulWidget {
   final Event event;
   final VoidCallback onTap;
   final VoidCallback? onEdit;
@@ -209,6 +214,101 @@ class _EventCard extends StatelessWidget {
     this.onEdit,
     this.onDelete,
   });
+
+  @override
+  ConsumerState<_EventCard> createState() => _EventCardState();
+}
+
+class _EventCardState extends ConsumerState<_EventCard> {
+  Room? _room;
+  Lab? _lab;
+  bool _isLoadingRoomLab = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRoomAndLab();
+  }
+
+  Future<void> _loadRoomAndLab() async {
+    setState(() => _isLoadingRoomLab = true);
+    
+    try {
+      debugPrint('🔄 Loading room and lab for event: ${widget.event.id}');
+      final eventRepository = ref.read(eventRepositoryProvider);
+      final roomRepository = RoomRepository();
+      final labRepository = LabRepository();
+      
+      // Get roomId and labId for event
+      final infoResult = await eventRepository.getEventRoomAndLabInfo(widget.event.id);
+      
+      debugPrint('   Info result success: ${infoResult.isSuccess}');
+      debugPrint('   Data: ${infoResult.data}');
+      
+      if (infoResult.isSuccess && infoResult.data != null) {
+        final roomId = infoResult.data!['roomId'];
+        final labId = infoResult.data!['labId'];
+        
+        debugPrint('   Extracted roomId: $roomId, labId: $labId');
+        
+        // Load Room
+        if (roomId != null && roomId.isNotEmpty) {
+          debugPrint('   Loading room: $roomId');
+          final roomResult = await roomRepository.getRoomById(roomId);
+          if (roomResult.isSuccess && roomResult.data != null) {
+            debugPrint('   ✅ Room loaded: ${roomResult.data!.name}');
+            if (mounted) {
+              setState(() => _room = roomResult.data);
+            }
+          } else {
+            debugPrint('   ❌ Failed to load room: ${roomResult.error}');
+          }
+        } else {
+          debugPrint('   ⚠️ No roomId found for event');
+        }
+        
+        // Load Lab
+        if (labId != null && labId.isNotEmpty) {
+          debugPrint('   Loading lab: $labId');
+          final labResult = await labRepository.getLabById(labId);
+          if (labResult.isSuccess && labResult.data != null) {
+            debugPrint('   ✅ Lab loaded from Hive: ${labResult.data!.name}');
+            if (mounted) {
+              setState(() => _lab = labResult.data);
+            }
+          } else {
+            debugPrint('   ⚠️ Lab not in Hive, trying Supabase...');
+            // Try from Supabase if not in Hive
+            final labsResult = await labRepository.getLabsFromSupabase();
+            if (labsResult.isSuccess && labsResult.data != null) {
+              try {
+                final lab = labsResult.data!.firstWhere(
+                  (l) => l.id == labId,
+                );
+                debugPrint('   ✅ Lab loaded from Supabase: ${lab.name}');
+                if (mounted) {
+                  setState(() => _lab = lab);
+                }
+              } catch (e) {
+                debugPrint('   ❌ Lab with id $labId not found in Supabase');
+              }
+            }
+          }
+        } else {
+          debugPrint('   ⚠️ No labId found for event');
+        }
+      } else {
+        debugPrint('   ❌ Failed to get event room/lab info: ${infoResult.error}');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error loading room/lab: $e');
+      debugPrint('   Stack trace: $stackTrace');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingRoomLab = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -223,7 +323,7 @@ class _EventCard extends StatelessWidget {
         side: BorderSide(color: Colors.grey[200]!),
       ),
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -231,11 +331,11 @@ class _EventCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Event Image
-              if (event.imageUrl != null && event.imageUrl!.isNotEmpty) ...[
+              if (widget.event.imageUrl != null && widget.event.imageUrl!.isNotEmpty) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: CachedNetworkImage(
-                    imageUrl: event.imageUrl!,
+                    imageUrl: widget.event.imageUrl!,
                     width: double.infinity,
                     height: 180,
                     fit: BoxFit.cover,
@@ -264,31 +364,31 @@ class _EventCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _getStatusColor(event.status).withOpacity(0.1),
+                      color: _getStatusColor(widget.event.status).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          _getStatusIcon(event.status),
+                          _getStatusIcon(widget.event.status),
                           size: 14,
-                          color: _getStatusColor(event.status),
+                          color: _getStatusColor(widget.event.status),
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          _getStatusText(event.status),
+                          _getStatusText(widget.event.status),
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: _getStatusColor(event.status),
+                            color: _getStatusColor(widget.event.status),
                           ),
                         ),
                       ],
                     ),
                   ),
                   const Spacer(),
-                  if (event.visibility)
+                  if (widget.event.visibility)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
@@ -315,16 +415,16 @@ class _EventCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                event.title,
+                widget.event.title,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              if (event.description != null) ...[
+              if (widget.event.description != null) ...[
                 const SizedBox(height: 4),
                 Text(
-                  event.description!,
+                  widget.event.description!,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -339,20 +439,20 @@ class _EventCard extends StatelessWidget {
                   Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
                   const SizedBox(width: 4),
                   Text(
-                    event.startDate != null
-                        ? dateFormat.format(event.startDate!)
+                    widget.event.startDate != null
+                        ? dateFormat.format(widget.event.startDate!)
                         : 'No date',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey[600],
                     ),
                   ),
-                  if (event.startDate != null) ...[
+                  if (widget.event.startDate != null) ...[
                     const SizedBox(width: 12),
                     Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
                     const SizedBox(width: 4),
                     Text(
-                      '${timeFormat.format(event.startDate!)} - ${event.endDate != null ? timeFormat.format(event.endDate!) : ''}',
+                      '${timeFormat.format(widget.event.startDate!)} - ${widget.event.endDate != null ? timeFormat.format(widget.event.endDate!) : ''}',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[600],
@@ -361,15 +461,59 @@ class _EventCard extends StatelessWidget {
                   ],
                 ],
               ),
+              // Lab and Room info
+              if (_lab != null || _room != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (_lab != null) ...[
+                      Icon(Icons.science, size: 16, color: Colors.orange[700]),
+                      const SizedBox(width: 4),
+                      Text(
+                        _lab!.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange[700],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (_room != null) ...[
+                        const SizedBox(width: 12),
+                        Icon(Icons.room, size: 16, color: Colors.blue[700]),
+                        const SizedBox(width: 4),
+                        Text(
+                          _room!.name,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue[700],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ] else if (_room != null) ...[
+                      Icon(Icons.room, size: 16, color: Colors.blue[700]),
+                      const SizedBox(width: 4),
+                      Text(
+                        _room!.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue[700],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
               // Capacity
-              if (event.capacity != null) ...[
+              if (widget.event.capacity != null) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Icon(Icons.people, size: 16, color: Colors.grey[600]),
                     const SizedBox(width: 4),
                     Text(
-                      'Capacity: ${event.capacity} people',
+                      'Capacity: ${widget.event.capacity} people',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[600],
@@ -379,26 +523,26 @@ class _EventCard extends StatelessWidget {
                   ],
                 ),
               ],
-              if (onEdit != null || onDelete != null) ...[
+              if (widget.onEdit != null || widget.onDelete != null) ...[
                 const SizedBox(height: 12),
                 const Divider(),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    if (onEdit != null)
+                    if (widget.onEdit != null)
                       TextButton.icon(
-                        onPressed: onEdit,
+                        onPressed: widget.onEdit,
                         icon: const Icon(Icons.edit, size: 16),
                         label: const Text('Edit Event'),
                         style: TextButton.styleFrom(
                           foregroundColor: const Color(0xFFFF6600),
                         ),
                       ),
-                    if (onEdit != null && onDelete != null)
+                    if (widget.onEdit != null && widget.onDelete != null)
                       const SizedBox(width: 8),
-                    if (onDelete != null)
+                    if (widget.onDelete != null)
                       TextButton.icon(
-                        onPressed: onDelete,
+                        onPressed: widget.onDelete,
                         icon: const Icon(Icons.delete, size: 16),
                         label: const Text('Delete'),
                         style: TextButton.styleFrom(

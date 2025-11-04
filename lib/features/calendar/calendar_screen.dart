@@ -31,6 +31,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   CalendarFilter _selectedFilter = CalendarFilter.all;
   bool _isLoading = false;
   DateTime? _lastRefreshTime;
+  bool _isCalendarExpanded = true; // Track calendar expand/collapse state
 
   @override
   bool get wantKeepAlive => true; // Keep state alive when switching tabs
@@ -104,8 +105,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     if (result.isSuccess && result.data != null) {
       final Map<String, String> roomMap = {};
       for (final lab in result.data!) {
-        roomMap[lab.roomId] = lab.name;
-        debugPrint('   📍 ${lab.roomId} → ${lab.name}');
+        if (lab.roomId != null && lab.roomId!.isNotEmpty) {
+          roomMap[lab.roomId!] = lab.name;
+          debugPrint('   📍 ${lab.roomId} → ${lab.name}');
+        }
       }
       if (mounted) {
         setState(() {
@@ -182,7 +185,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       body: Column(
         children: [
         
-          // Month/Year Header with Navigation
+          // Month/Year Header with Navigation and Toggle Button
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -219,37 +222,58 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     color: Color(0xFF1E293B),
                   ),
                 ),
-                IconButton(
-                  onPressed: () {
-                    setState(() {
-                      _focusedDay = DateTime(_focusedDay.year, _focusedDay.month + 1);
-                    });
-                  },
-                  icon: const Icon(
-                    Icons.chevron_right,
-                    color: Color(0xFF64748B),
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _isCalendarExpanded = !_isCalendarExpanded;
+                        });
+                      },
+                      icon: Icon(
+                        _isCalendarExpanded ? Icons.expand_less : Icons.expand_more,
+                        color: const Color(0xFFFF6600),
+                      ),
+                      tooltip: _isCalendarExpanded ? 'Thu gọn lịch' : 'Mở rộng lịch',
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _focusedDay = DateTime(_focusedDay.year, _focusedDay.month + 1);
+                        });
+                      },
+                      icon: const Icon(
+                        Icons.chevron_right,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
           
-          // Calendar Grid
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: TableCalendar<Event>(
+          // Calendar Grid - AnimatedSize for smooth expand/collapse
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: _isCalendarExpanded
+                ? Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: TableCalendar<Event>(
             firstDay: DateTime.utc(2020, 1, 1),
             lastDay: DateTime.utc(2030, 12, 31),
             focusedDay: _focusedDay,
@@ -319,6 +343,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
               ),
             ),
           ),
+                  )
+                : const SizedBox.shrink(),
           ),
 
           // Filter Chips

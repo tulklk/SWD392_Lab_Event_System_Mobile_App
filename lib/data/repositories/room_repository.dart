@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/supabase_config.dart';
@@ -168,6 +169,132 @@ class RoomRepository {
       return Success(rooms);
     } catch (e) {
       return Failure('Failed to fetch rooms by capacity: $e');
+    }
+  }
+
+  // Get rooms by LabId
+  // Database schema shows tbl_rooms has LabId column (uuid)
+  Future<Result<List<Room>>> getRoomsByLabId(String labId) async {
+    try {
+      debugPrint('🔍 Getting rooms for LabId: $labId');
+      debugPrint('   LabId type: ${labId.runtimeType}');
+      debugPrint('   LabId length: ${labId.length}');
+      
+      // First, try to get all rooms to debug
+      try {
+        final allRoomsResponse = await _supabase
+            .from('tbl_rooms')
+            .select()
+            .eq('Status', 1);
+        
+        if (allRoomsResponse != null && allRoomsResponse.isNotEmpty) {
+          debugPrint('📊 Total active rooms in database: ${allRoomsResponse.length}');
+          // Check what LabIds exist
+          final allRooms = (allRoomsResponse as List).cast<Map<String, dynamic>>();
+          final labIdsInRooms = allRooms
+              .where((r) => r['LabId'] != null)
+              .map((r) => r['LabId'].toString())
+              .toSet();
+          debugPrint('   Unique LabIds in rooms: ${labIdsInRooms.length}');
+          labIdsInRooms.forEach((lid) {
+            debugPrint('     - $lid');
+            final roomsForLab = allRooms.where((r) => r['LabId']?.toString() == lid).length;
+            debugPrint('       -> $roomsForLab rooms');
+          });
+          
+          // Check if our LabId matches any
+          final matchingRooms = allRooms.where((r) {
+            final roomLabId = r['LabId']?.toString();
+            return roomLabId == labId;
+          }).toList();
+          
+          if (matchingRooms.isNotEmpty) {
+            debugPrint('✅ Found ${matchingRooms.length} matching rooms (direct match)');
+            final rooms = matchingRooms
+                .map((json) => Room.fromJson(json))
+                .toList();
+            return Success(rooms);
+          } else {
+            debugPrint('⚠️ No direct match found. Checking case-insensitive...');
+            // Try case-insensitive match
+            final caseInsensitiveMatch = allRooms.where((r) {
+              final roomLabId = r['LabId']?.toString().toLowerCase();
+              return roomLabId == labId.toLowerCase();
+            }).toList();
+            
+            if (caseInsensitiveMatch.isNotEmpty) {
+              debugPrint('✅ Found ${caseInsensitiveMatch.length} rooms (case-insensitive match)');
+              final rooms = caseInsensitiveMatch
+                  .map((json) => Room.fromJson(json))
+                  .toList();
+              return Success(rooms);
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Error getting all rooms for debug: $e');
+      }
+      
+      // Now try the actual query
+      debugPrint('🔍 Querying with Supabase filter...');
+      final response = await _supabase
+          .from('tbl_rooms')
+          .select()
+          .eq('LabId', labId)
+          .eq('Status', 1)
+          .order('Name', ascending: true);
+
+      debugPrint('   Raw response type: ${response.runtimeType}');
+      debugPrint('   Response is null: ${response == null}');
+      
+      if (response == null) {
+        debugPrint('⚠️ Response is null');
+        return Success(<Room>[]);
+      }
+
+      final responseList = response as List;
+      debugPrint('   Response length: ${responseList.length}');
+      
+      if (responseList.isEmpty) {
+        debugPrint('⚠️ No rooms found for LabId: $labId');
+        debugPrint('   Trying without Status filter...');
+        
+        // Try without Status filter
+        final responseNoStatus = await _supabase
+            .from('tbl_rooms')
+            .select()
+            .eq('LabId', labId)
+            .order('Name', ascending: true);
+        
+        if (responseNoStatus != null && (responseNoStatus as List).isNotEmpty) {
+          debugPrint('✅ Found ${(responseNoStatus as List).length} rooms (without Status filter)');
+          final rooms = (responseNoStatus as List)
+              .map((json) => Room.fromJson(json as Map<String, dynamic>))
+              .toList();
+          return Success(rooms);
+        }
+        
+        return Success(<Room>[]);
+      }
+
+      final rooms = responseList
+          .map((json) {
+            try {
+              return Room.fromJson(json as Map<String, dynamic>);
+            } catch (e) {
+              debugPrint('❌ Error parsing room: $e');
+              debugPrint('Room JSON: $json');
+              rethrow;
+            }
+          })
+          .toList();
+
+      debugPrint('✅ Found ${rooms.length} rooms for LabId: $labId');
+      return Success(rooms);
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error fetching rooms by LabId: $e');
+      debugPrint('Stack trace: $stackTrace');
+      return Failure('Failed to fetch rooms by lab: $e');
     }
   }
 }
