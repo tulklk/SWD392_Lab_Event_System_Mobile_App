@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -9,10 +10,12 @@ import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/room_repository.dart';
 import '../../data/repositories/room_slot_repository.dart';
 import '../../data/repositories/booking_repository.dart';
+import '../../data/repositories/lab_repository.dart';
 import '../../domain/models/event.dart';
 import '../../domain/models/room.dart';
 import '../../domain/models/room_slot.dart';
 import '../../domain/models/booking.dart';
+import '../../domain/models/lab.dart';
 import '../auth/auth_controller.dart';
 
 class CreateEventScreen extends ConsumerStatefulWidget {
@@ -48,45 +51,102 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   File? _selectedImage;
   final ImagePicker _imagePicker = ImagePicker();
 
-  // Room and Slot selection
+  // Lab, Room and Slot selection
+  final LabRepository _labRepository = LabRepository();
   final RoomRepository _roomRepository = RoomRepository();
   final RoomSlotRepository _roomSlotRepository = RoomSlotRepository();
   final BookingRepository _bookingRepository = BookingRepository();
   
+  List<Lab> _labs = [];
   List<Room> _rooms = [];
   List<RoomSlot> _availableSlots = [];
   List<Booking> _existingBookings = [];
+  Lab? _selectedLab;
   Room? _selectedRoom;
   Set<String> _selectedSlotIds = {}; // Set để lưu các slot IDs đã chọn
   
+  bool _isLoadingLabs = false;
   bool _isLoadingRooms = false;
   bool _isLoadingSlots = false;
 
   @override
   void initState() {
     super.initState();
-    _loadRooms();
+    _loadLabs();
     if (widget.eventId != null) {
       _loadEvent();
     }
   }
 
-  Future<void> _loadRooms() async {
-    setState(() => _isLoadingRooms = true);
-    final result = await _roomRepository.getActiveRooms();
+  Future<void> _loadLabs() async {
+    setState(() => _isLoadingLabs = true);
+    final result = await _labRepository.getLabsFromSupabase();
     
     if (result.isSuccess && mounted) {
       setState(() {
-        _rooms = result.data!;
-        _isLoadingRooms = false;
+        _labs = result.data!;
+        _isLoadingLabs = false;
       });
     } else {
-      setState(() => _isLoadingRooms = false);
+      setState(() => _isLoadingLabs = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.error ?? 'Failed to load labs'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadRooms() async {
+    if (_selectedLab == null) {
+      setState(() {
+        _rooms = [];
+        _selectedRoom = null;
+        _availableSlots = [];
+        _selectedSlotIds.clear();
+      });
+      return;
+    }
+
+    setState(() => _isLoadingRooms = true);
+    debugPrint('🔄 Loading rooms for Lab: ${_selectedLab!.name} (${_selectedLab!.id})');
+    
+    final result = await _roomRepository.getRoomsByLabId(_selectedLab!.id);
+    
+    if (result.isSuccess && mounted) {
+      debugPrint('✅ Loaded ${result.data!.length} rooms');
+      setState(() {
+        _rooms = result.data!;
+        _selectedRoom = null; // Reset selected room when lab changes
+        _availableSlots = [];
+        _selectedSlotIds.clear();
+        _isLoadingRooms = false;
+      });
+      
+      if (_rooms.isEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No rooms found for this lab. Please contact administrator.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } else {
+      debugPrint('❌ Failed to load rooms: ${result.error}');
+      setState(() {
+        _isLoadingRooms = false;
+        _rooms = []; // Clear rooms on error
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result.error ?? 'Failed to load rooms'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -238,6 +298,16 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   }
 
   Future<void> _selectStartDate() async {
+    if (_selectedRoom == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a room first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     final date = await showDatePicker(
       context: context,
       initialDate: _startDate ?? DateTime.now(),
@@ -249,10 +319,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       setState(() {
         _startDate = date;
       });
-      // Reload slots if room is selected
-      if (_selectedRoom != null) {
-        _loadAvailableSlots();
-      }
+      // Reload slots when date is selected
+      _loadAvailableSlots();
     }
   }
 
@@ -430,6 +498,26 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   Future<void> _saveEvent({bool isDraft = false}) async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (_selectedLab == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a lab'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedRoom == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a room'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     if (_startDate == null || _startTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -488,9 +576,19 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
 
     if (widget.eventId != null && _existingEvent != null) {
       // Update existing event
-      final capacityValue = _capacityController.text.trim().isEmpty 
-          ? null 
-          : int.tryParse(_capacityController.text.trim());
+      final capacityValue = int.tryParse(_capacityController.text.trim());
+      if (capacityValue == null || capacityValue <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a valid capacity'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        setState(() {
+          _isSaving = false;
+        });
+        return;
+      }
       
       final updatedEvent = _existingEvent!.copyWith(
         title: _titleController.text.trim(),
@@ -529,9 +627,19 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       }
     } else {
       // Create new event
-      final capacityValue = _capacityController.text.trim().isEmpty 
-          ? null 
-          : int.tryParse(_capacityController.text.trim());
+      final capacityValue = int.tryParse(_capacityController.text.trim());
+      if (capacityValue == null || capacityValue <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a valid capacity'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        setState(() {
+          _isSaving = false;
+        });
+        return;
+      }
       
       final result = await eventRepository.createEvent(
         title: _titleController.text.trim(),
@@ -543,6 +651,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         status: isDraft ? 0 : 1,
         capacity: capacityValue,
         imageUrl: imageUrl,
+        labId: _selectedLab?.id,
         roomId: _selectedRoom?.id,
         roomSlotIds: _selectedSlotIds.isNotEmpty ? _selectedSlotIds.toList() : null,
       );
@@ -643,15 +752,15 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                     const Divider(),
                     const SizedBox(height: 16),
 
-                    // Room Selection
+                    // Lab Selection
                     Text(
-                      'Select Room',
+                      'Select Lab',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                     ),
                     const SizedBox(height: 8),
-                    _isLoadingRooms
+                    _isLoadingLabs
                         ? Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
@@ -671,19 +780,19 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                               border: Border.all(color: Colors.grey[300]!),
                             ),
                             child: DropdownButtonHideUnderline(
-                              child: DropdownButton<Room>(
-                                value: _selectedRoom,
+                              child: DropdownButton<Lab>(
+                                value: _selectedLab,
                                 hint: const Text(
-                                  'Select a room (optional)',
+                                  'Select a lab *',
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 isExpanded: true,
                                 selectedItemBuilder: (BuildContext context) {
-                                  return _rooms.map<Widget>((Room room) {
+                                  return _labs.map<Widget>((Lab lab) {
                                     return Container(
                                       alignment: Alignment.centerLeft,
                                       child: Text(
-                                        room.name,
+                                        lab.name,
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w600,
                                           fontSize: 14,
@@ -693,18 +802,19 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                                     );
                                   }).toList();
                                 },
-                                onChanged: (Room? newValue) {
+                                onChanged: (Lab? newValue) {
                                   setState(() {
-                                    _selectedRoom = newValue;
+                                    _selectedLab = newValue;
+                                    _selectedRoom = null;
+                                    _availableSlots = [];
                                     _selectedSlotIds.clear();
+                                    _startDate = null;
                                   });
-                                  if (_startDate != null) {
-                                    _loadAvailableSlots();
-                                  }
+                                  _loadRooms();
                                 },
-                                items: _rooms.map<DropdownMenuItem<Room>>((Room room) {
-                                  return DropdownMenuItem<Room>(
-                                    value: room,
+                                items: _labs.map<DropdownMenuItem<Lab>>((Lab lab) {
+                                  return DropdownMenuItem<Lab>(
+                                    value: lab,
                                     child: Container(
                                       constraints: const BoxConstraints(maxHeight: 56),
                                       child: Column(
@@ -713,7 +823,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
                                           Text(
-                                            room.name,
+                                            lab.name,
                                             style: const TextStyle(
                                               fontWeight: FontWeight.w600,
                                               fontSize: 14,
@@ -721,16 +831,18 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                           ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '${room.capacity} seats',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: Colors.grey[600],
+                                          if (lab.location != null) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              lab.location!,
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.grey[600],
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
+                                          ],
                                         ],
                                       ),
                                     ),
@@ -740,7 +852,128 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                             ),
                           ),
 
-                    // Room Slots Selection
+                    // Room Selection (only show after Lab is selected)
+                    if (_selectedLab != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        'Select Room',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      _isLoadingRooms
+                          ? Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey[300]!),
+                              ),
+                              child: const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            )
+                          : Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey[300]!),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<Room>(
+                                  value: _selectedRoom,
+                                  hint: const Text(
+                                    'Select a room *',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  isExpanded: true,
+                                  selectedItemBuilder: (BuildContext context) {
+                                    return _rooms.map<Widget>((Room room) {
+                                      return Container(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          room.name,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    }).toList();
+                                  },
+                                  onChanged: (Room? newValue) {
+                                    setState(() {
+                                      _selectedRoom = newValue;
+                                      _availableSlots = [];
+                                      _selectedSlotIds.clear();
+                                      _startDate = null; // Reset date when room changes
+                                    });
+                                  },
+                                  items: _rooms.map<DropdownMenuItem<Room>>((Room room) {
+                                    return DropdownMenuItem<Room>(
+                                      value: room,
+                                      child: Container(
+                                        constraints: const BoxConstraints(maxHeight: 56),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              room.name,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '${room.capacity} seats',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.grey[600],
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ),
+                    ] else if (!_isLoadingLabs) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Please select a lab first',
+                                style: TextStyle(color: Colors.blue[900]),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // Room Slots Selection (only show after Room and Date are selected)
                     if (_selectedRoom != null && _startDate != null) ...[
                       const SizedBox(height: 16),
                       Text(
@@ -960,6 +1193,28 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                           ],
                         ),
                       ),
+                    ] else if (_selectedRoom == null && _selectedLab != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.orange[700], size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Please select a room first',
+                                style: TextStyle(color: Colors.orange[900]),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
 
                     const SizedBox(height: 24),
@@ -1047,17 +1302,18 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                       controller: _capacityController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
-                        labelText: 'Capacity (optional)',
+                        labelText: 'Capacity *',
                         hintText: 'e.g. 50',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.people),
                       ),
                       validator: (value) {
-                        if (value != null && value.trim().isNotEmpty) {
-                          final capacity = int.tryParse(value.trim());
-                          if (capacity == null || capacity <= 0) {
-                            return 'Please enter a valid capacity number';
-                          }
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter capacity';
+                        }
+                        final capacity = int.tryParse(value.trim());
+                        if (capacity == null || capacity <= 0) {
+                          return 'Please enter a valid capacity number';
                         }
                         return null;
                       },

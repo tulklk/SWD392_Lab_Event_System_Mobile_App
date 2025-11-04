@@ -1,13 +1,50 @@
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/models/lab.dart';
 import '../../core/utils/result.dart';
 
 class LabRepository {
   static const String _boxName = 'labs';
   late Box<Lab> _box;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   Future<void> init() async {
     _box = await Hive.openBox<Lab>(_boxName);
+  }
+  
+  // Get labs from Supabase
+  Future<Result<List<Lab>>> getLabsFromSupabase() async {
+    try {
+      final response = await _supabase
+          .from('tbl_labs')
+          .select()
+          .eq('Status', 1) // active only
+          .order('Name', ascending: true);
+
+      if (response == null || response.isEmpty) {
+        return Success(<Lab>[]);
+      }
+
+      final labs = (response as List)
+          .map((json) {
+            try {
+              return Lab.fromJson(json as Map<String, dynamic>);
+            } catch (e) {
+              debugPrint('Error parsing lab: $e');
+              debugPrint('Lab JSON: $json');
+              rethrow;
+            }
+          })
+          .where((lab) => lab.id.isNotEmpty && lab.name.isNotEmpty) // Filter out invalid labs
+          .toList();
+
+      return Success(labs);
+    } catch (e, stackTrace) {
+      debugPrint('Error fetching labs: $e');
+      debugPrint('Stack trace: $stackTrace');
+      return Failure('Failed to fetch labs: $e');
+    }
   }
 
   Future<Result<Lab>> createLab({

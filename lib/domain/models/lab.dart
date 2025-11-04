@@ -6,7 +6,7 @@ class Lab {
   final DateTime createdAt;
   final DateTime lastUpdatedAt;
   final int status; // 0: inactive, 1: active, 2: maintenance
-  final String roomId;
+  final String? roomId; // Made nullable as it might not exist in database
 
   Lab({
     required this.id,
@@ -15,7 +15,7 @@ class Lab {
     required this.createdAt,
     required this.lastUpdatedAt,
     this.status = 1,
-    required this.roomId,
+    this.roomId,
   });
 
   Lab copyWith({
@@ -40,13 +40,17 @@ class Lab {
 
   factory Lab.fromJson(Map<String, dynamic> json) {
     return Lab(
-      id: json['Id'] as String,
-      name: json['Name'] as String,
-      location: json['Location'] as String?,
-      createdAt: DateTime.parse(json['CreatedAt'] as String),
-      lastUpdatedAt: DateTime.parse(json['LastUpdatedAt'] as String),
+      id: json['Id']?.toString() ?? '',
+      name: json['Name']?.toString() ?? '',
+      location: json['Location']?.toString(),
+      createdAt: json['CreatedAt'] != null 
+          ? DateTime.parse(json['CreatedAt'].toString())
+          : DateTime.now(),
+      lastUpdatedAt: json['LastUpdatedAt'] != null
+          ? DateTime.parse(json['LastUpdatedAt'].toString())
+          : DateTime.now(),
       status: json['Status'] as int? ?? 1,
-      roomId: json['RoomId'] as String,
+      roomId: json['RoomId']?.toString(),
     );
   }
 
