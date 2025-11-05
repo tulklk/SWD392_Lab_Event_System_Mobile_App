@@ -19,6 +19,7 @@ class LecturerDashboardScreen extends ConsumerStatefulWidget {
 
 class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScreen> {
   int _selectedIndex = 0;
+  int _eventsRefreshTrigger = 0; // Counter to trigger refresh
 
   List<Widget> get _screens => [
     LecturerOverviewPage(
@@ -26,9 +27,17 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
         setState(() {
           _selectedIndex = index;
         });
+        // Refresh events screen when navigated to Events tab
+        if (index == 1) {
+          setState(() {
+            _eventsRefreshTrigger++; // Trigger refresh
+          });
+        }
       },
     ),
-    const LecturerEventsScreen(),
+    LecturerEventsScreen(
+      key: ValueKey(_eventsRefreshTrigger), // Rebuild when trigger changes
+    ),
     const PendingBookingsScreen(),
   ];
 
@@ -220,6 +229,13 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
           setState(() {
             _selectedIndex = index;
           });
+          // Refresh events screen when Events tab is selected
+          if (index == 1) {
+            // Events tab is at index 1 - trigger refresh by updating key
+            setState(() {
+              _eventsRefreshTrigger++;
+            });
+          }
         },
         destinations: const [
           NavigationDestination(

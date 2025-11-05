@@ -13,6 +13,7 @@ import '../../data/repositories/room_repository.dart';
 import '../../data/repositories/lab_repository.dart';
 import '../../core/utils/result.dart';
 import '../auth/auth_controller.dart';
+import 'booking_providers.dart';
 import 'booking_detail_bottomsheet.dart';
 
 class MyBookingsScreen extends ConsumerStatefulWidget {
@@ -27,6 +28,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   List<Booking> _bookings = [];
   bool _isLoading = false;
   DateTime? _lastRefreshTime;
+  int _lastRefreshTrigger = 0; // Track the refresh provider state
 
   @override
   bool get wantKeepAlive => true;
@@ -56,12 +58,30 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Always refresh when dependencies change (e.g., when tab becomes visible)
-    final now = DateTime.now();
-    if (_lastRefreshTime == null || 
-        now.difference(_lastRefreshTime!).inSeconds > 2) {
-      debugPrint('🔄 My Bookings: Dependencies changed, refreshing...');
+    
+    // Watch the refresh provider to detect when a booking is created
+    final currentRefreshTrigger = ref.watch(myBookingsRefreshProvider);
+    
+    // Initialize trigger on first call if needed
+    if (_lastRefreshTrigger == 0 && currentRefreshTrigger > 0) {
+      _lastRefreshTrigger = currentRefreshTrigger;
+    }
+    
+    // If refresh trigger changed (booking was created), force refresh immediately
+    if (currentRefreshTrigger != _lastRefreshTrigger) {
+      debugPrint('🔄 My Bookings: Refresh triggered by booking creation (trigger: $currentRefreshTrigger)');
+      _lastRefreshTrigger = currentRefreshTrigger;
+      // Force refresh immediately when booking is created
+      _lastRefreshTime = null; // Reset to force refresh
       _refreshData();
+    } else {
+      // Otherwise, use time-based refresh for tab visibility
+      final now = DateTime.now();
+      if (_lastRefreshTime == null || 
+          now.difference(_lastRefreshTime!).inSeconds > 2) {
+        debugPrint('🔄 My Bookings: Dependencies changed, refreshing...');
+        _refreshData();
+      }
     }
   }
 
@@ -224,7 +244,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     final upcomingBookings = _bookings
         .where((b) => b.isPending || (b.endTime.isAfter(now) && !b.isCancelled))
         .toList()
-      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt)); // Newest first (mới nhất lên đầu)
     
     debugPrint('🔍 Total bookings: ${_bookings.length}');
     debugPrint('✅ Upcoming bookings: ${upcomingBookings.length}');
@@ -306,7 +326,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     final pastBookings = _bookings
         .where((b) => (b.endTime.isBefore(now) || b.isCancelled) && !b.isPending)
         .toList()
-      ..sort((a, b) => b.startTime.compareTo(a.startTime));
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt)); // Newest first (mới nhất lên đầu)
     
     debugPrint('📚 Past bookings: ${pastBookings.length}');
     for (final b in pastBookings) {

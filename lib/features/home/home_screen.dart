@@ -7,6 +7,7 @@ import '../calendar/calendar_screen.dart';
 import '../events/student_events_screen.dart';
 import '../labs/labs_screen.dart';
 import '../bookings/my_bookings_screen.dart';
+import '../bookings/booking_providers.dart';
 import '../admin/admin_dashboard_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../domain/enums/role.dart';
@@ -28,6 +29,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final isAdmin = ref.watch(isAdminProvider);
     final isLecturer = ref.watch(isLecturerProvider);
     final isStudent = ref.watch(isStudentProvider);
+    
+    // Watch for navigation signal to My Bookings
+    final navigateToMyBookings = ref.watch(navigateToMyBookingsProvider);
+    if (navigateToMyBookings && isStudent) {
+      // Navigate to My Bookings tab (index 3 for students)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _selectedIndex != 3) {
+          setState(() {
+            _selectedIndex = 3;
+          });
+        }
+      });
+    }
     
     // Define screens and navigation based on role
     List<Widget> screens = [];
