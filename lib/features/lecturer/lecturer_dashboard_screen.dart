@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../auth/auth_controller.dart';
-import '../bookings/my_bookings_screen.dart';
 import 'lecturer_events_screen.dart';
 import 'pending_bookings_screen.dart';
+import '../../data/repositories/booking_repository.dart';
+import '../../data/repositories/event_repository.dart';
+import '../../data/repositories/event_registration_repository.dart';
+import '../../domain/models/event.dart';
 
 class LecturerDashboardScreen extends ConsumerStatefulWidget {
   const LecturerDashboardScreen({super.key});
@@ -16,11 +20,16 @@ class LecturerDashboardScreen extends ConsumerStatefulWidget {
 class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [
-    const LecturerOverviewPage(),
+  List<Widget> get _screens => [
+    LecturerOverviewPage(
+      onTabChange: (index) {
+        setState(() {
+          _selectedIndex = index;
+        });
+      },
+    ),
     const LecturerEventsScreen(),
     const PendingBookingsScreen(),
-    const MyBookingsScreen(),
   ];
 
   @override
@@ -228,11 +237,6 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
             selectedIcon: Icon(Icons.approval),
             label: 'Approvals',
           ),
-          NavigationDestination(
-            icon: Icon(Icons.book_online_outlined),
-            selectedIcon: Icon(Icons.book_online),
-            label: 'My Bookings',
-          ),
         ],
       ),
     );
@@ -240,11 +244,92 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
 }
 
 // Overview Page with statistics
-class LecturerOverviewPage extends ConsumerWidget {
-  const LecturerOverviewPage({super.key});
+class LecturerOverviewPage extends ConsumerStatefulWidget {
+  final Function(int)? onTabChange;
+  
+  const LecturerOverviewPage({
+    super.key,
+    this.onTabChange,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LecturerOverviewPage> createState() => _LecturerOverviewPageState();
+}
+
+class _LecturerOverviewPageState extends ConsumerState<LecturerOverviewPage> {
+  int _pendingApprovalsCount = 0;
+  int _activeEventsCount = 0;
+  int _totalRegistrationsCount = 0;
+  bool _isLoadingStats = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatistics();
+  }
+
+  Future<void> _loadStatistics() async {
+    setState(() => _isLoadingStats = true);
+
+    final currentUser = ref.read(currentUserProvider);
+    if (currentUser == null) {
+      setState(() => _isLoadingStats = false);
+      return;
+    }
+
+    try {
+      // 1. Get pending approvals count
+      final bookingRepository = ref.read(bookingRepositoryProvider);
+      final pendingBookingsResult = await bookingRepository.getPendingBookings();
+      final pendingCount = pendingBookingsResult.isSuccess 
+          ? (pendingBookingsResult.data?.length ?? 0)
+          : 0;
+
+      // 2. Get active events count
+      final eventRepository = ref.read(eventRepositoryProvider);
+      final eventsResult = await eventRepository.getEventsByCreator(currentUser.id);
+      final now = DateTime.now();
+      final activeEvents = eventsResult.isSuccess && eventsResult.data != null
+          ? eventsResult.data!.where((event) {
+              return event.status == 1 && // active
+                     event.startDate != null &&
+                     event.endDate != null &&
+                     event.startDate!.isBefore(now) &&
+                     event.endDate!.isAfter(now);
+            }).toList()
+          : <Event>[];
+      final activeCount = activeEvents.length;
+
+      // 3. Get total registrations count (for all events created by lecturer)
+      int totalRegistrations = 0;
+      if (eventsResult.isSuccess && eventsResult.data != null) {
+        final eventRegistrationRepository = ref.read(eventRegistrationRepositoryProvider);
+        for (final event in eventsResult.data!) {
+          final registrationsResult = await eventRegistrationRepository.getRegistrationsForEvent(event.id);
+          if (registrationsResult.isSuccess && registrationsResult.data != null) {
+            totalRegistrations += registrationsResult.data!.length;
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _pendingApprovalsCount = pendingCount;
+          _activeEventsCount = activeCount;
+          _totalRegistrationsCount = totalRegistrations;
+          _isLoadingStats = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Error loading statistics: $e');
+      if (mounted) {
+        setState(() => _isLoadingStats = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final currentUser = ref.watch(currentUserProvider);
 
     return SingleChildScrollView(
@@ -344,7 +429,8 @@ class LecturerOverviewPage extends ConsumerWidget {
                   subtitle: 'Review bookings',
                   color: Colors.orange,
                   onTap: () {
-                    // Navigate to approvals tab
+                    // Navigate to approvals tab (index 2)
+                    widget.onTabChange?.call(2);
                   },
                 ),
               ),
@@ -365,23 +451,29 @@ class LecturerOverviewPage extends ConsumerWidget {
           _StatisticCard(
             icon: Icons.pending_actions,
             title: 'Pending Approvals',
-            value: '12',
+            value: _isLoadingStats ? '...' : '$_pendingApprovalsCount',
             subtitle: 'Bookings waiting review',
             color: Colors.amber,
+            onTap: () {
+              widget.onTabChange?.call(2); // Navigate to Approvals tab
+            },
           ),
           const SizedBox(height: 12),
           _StatisticCard(
             icon: Icons.event_available,
             title: 'Active Events',
-            value: '5',
+            value: _isLoadingStats ? '...' : '$_activeEventsCount',
             subtitle: 'Ongoing workshops',
             color: Colors.green,
+            onTap: () {
+              widget.onTabChange?.call(1); // Navigate to Events tab
+            },
           ),
           const SizedBox(height: 12),
           _StatisticCard(
             icon: Icons.people_outline,
             title: 'Total Registrations',
-            value: '87',
+            value: _isLoadingStats ? '...' : '$_totalRegistrationsCount',
             subtitle: 'Students registered',
             color: Colors.purple,
           ),
@@ -459,6 +551,7 @@ class _StatisticCard extends StatelessWidget {
   final String value;
   final String subtitle;
   final Color color;
+  final VoidCallback? onTap;
 
   const _StatisticCard({
     required this.icon,
@@ -466,65 +559,70 @@ class _StatisticCard extends StatelessWidget {
     required this.value,
     required this.subtitle,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-            child: Icon(icon, color: color, size: 28),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey[500],
-                  ),
-                ),
-              ],
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 28),
             ),
-          ),
-          Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
-        ],
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
+          ],
+        ),
       ),
     );
   }
