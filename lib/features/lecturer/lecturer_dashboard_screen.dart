@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../auth/auth_controller.dart';
+import '../notifications/notification_providers.dart';
 import 'lecturer_events_screen.dart';
 import 'pending_bookings_screen.dart';
 import '../../data/repositories/booking_repository.dart';
@@ -110,6 +111,7 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
           ],
         ),
         actions: [
+          // Notification Bell with Badge
           Container(
             margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
@@ -123,12 +125,10 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
                 ),
               ],
             ),
-            child: IconButton(
-              onPressed: () {},
-              icon: Icon(
-                Icons.notifications_outlined,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            child: _NotificationBell(
+              onTap: () {
+                context.push('/notifications');
+              },
             ),
           ),
           Container(
@@ -639,6 +639,67 @@ class _StatisticCard extends StatelessWidget {
             Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Notification Bell Widget with Badge
+class _NotificationBell extends ConsumerWidget {
+  final VoidCallback onTap;
+
+  const _NotificationBell({
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unreadCountAsync = ref.watch(unreadNotificationCountProvider);
+
+    return IconButton(
+      onPressed: onTap,
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(
+            Icons.notifications_outlined,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          unreadCountAsync.when(
+            data: (count) {
+              if (count > 0) {
+                return Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      shape: count > 9 ? BoxShape.rectangle : BoxShape.circle,
+                      borderRadius: count > 9 ? BorderRadius.circular(8) : null,
+                    ),
+                    child: Text(
+                      count > 99 ? '99+' : count.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+        ],
       ),
     );
   }

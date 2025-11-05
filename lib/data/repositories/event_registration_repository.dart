@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import '../../core/utils/result.dart';
 import '../../domain/models/event_registration.dart';
 import '../../domain/models/booking.dart';
+import '../services/notification_service.dart';
+import '../repositories/event_repository.dart';
 import 'dart:math';
 
 final eventRegistrationRepositoryProvider = Provider<EventRegistrationRepository>((ref) {
@@ -140,8 +142,14 @@ class EventRegistrationRepository {
   // Approve registration
   // Note: Updates booking in tbl_bookings
   Future<Result<void>> approveRegistration(String id) async {
+    debugPrint('═══════════════════════════════════════════════════════════');
+    debugPrint('🚀 EventRegistrationRepository.approveRegistration() CALLED');
+    debugPrint('   Booking/Registration ID: $id');
+    debugPrint('   Timestamp: ${DateTime.now().toIso8601String()}');
+    debugPrint('═══════════════════════════════════════════════════════════');
+    
     try {
-      debugPrint('✅ Approving registration/booking: $id');
+      debugPrint('✅ Step 1: Approving registration/booking: $id');
       
       // Generate attendance code (6-digit)
       final attendanceCode = _generateAttendanceCode();
@@ -170,11 +178,94 @@ class EventRegistrationRepository {
             .eq('Id', id);
       }
 
-      debugPrint('✅ Registration approved successfully');
+      debugPrint('✅ Step 2: Registration approved successfully in database');
+      debugPrint('   Status updated to: Approved (1)');
+      debugPrint('   Attendance Code: $attendanceCode');
+      
+      // Send notification to student about approval
+      debugPrint('');
+      debugPrint('📤 Step 3: Preparing to send notification to student...');
+      try {
+        final notificationService = NotificationService();
+        final eventRepository = EventRepository();
+        
+        // Get booking to find student and event
+        debugPrint('🔍 EventRegistrationRepository: Fetching booking details for ID: $id');
+        final bookingResult = await _supabase
+            .from('tbl_bookings')
+            .select('UserId, EventId')
+            .eq('Id', id)
+            .maybeSingle();
+        
+        if (bookingResult == null) {
+          debugPrint('❌ EventRegistrationRepository: Booking not found with ID: $id');
+        } else {
+          final studentId = bookingResult['UserId'] as String?;
+          final eventId = bookingResult['EventId'] as String?;
+          
+          debugPrint('📋 EventRegistrationRepository: Booking details found');
+          debugPrint('   Student ID: $studentId');
+          debugPrint('   Event ID: $eventId');
+          
+          if (studentId == null || eventId == null) {
+            debugPrint('❌ EventRegistrationRepository: Missing studentId or eventId');
+            debugPrint('   studentId is null: ${studentId == null}');
+            debugPrint('   eventId is null: ${eventId == null}');
+          } else {
+            // Get event title
+            debugPrint('🔍 EventRegistrationRepository: Fetching event details for ID: $eventId');
+            final eventResult = await eventRepository.getEventById(eventId);
+            
+            if (!eventResult.isSuccess) {
+              debugPrint('❌ EventRegistrationRepository: Failed to get event: ${eventResult.error}');
+            } else if (eventResult.data == null) {
+              debugPrint('❌ EventRegistrationRepository: Event not found');
+            } else {
+              final eventTitle = eventResult.data!.title;
+              debugPrint('✅ EventRegistrationRepository: Event found - "$eventTitle"');
+              
+              // Send notification to student
+              debugPrint('📤 EventRegistrationRepository: Sending notification to student...');
+              final notificationResult = await notificationService.notifyStudentOfApproval(
+                studentId: studentId,
+                eventTitle: eventTitle,
+                bookingId: id,
+              );
+              
+              if (notificationResult) {
+                debugPrint('✅ EventRegistrationRepository: Notification sent successfully to student: $studentId');
+              } else {
+                debugPrint('❌ EventRegistrationRepository: Failed to send notification to student: $studentId');
+                debugPrint('   Possible reasons:');
+                debugPrint('   1. Student has not logged in and initialized FCM');
+                debugPrint('   2. Student has not granted notification permissions');
+                debugPrint('   3. FCM token not found in database');
+                debugPrint('   4. FCM Service Account authentication failed');
+              }
+            }
+          }
+        }
+      } catch (e, stackTrace) {
+        debugPrint('❌ EventRegistrationRepository: Exception while sending notification: $e');
+        debugPrint('   Stack trace: $stackTrace');
+        // Don't fail approval if notification fails
+      }
+      
+      debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('✅ EventRegistrationRepository.approveRegistration() COMPLETED SUCCESSFULLY');
+      debugPrint('   Booking ID: $id');
+      debugPrint('   Timestamp: ${DateTime.now().toIso8601String()}');
+      debugPrint('═══════════════════════════════════════════════════════════');
+      
       return const Success(null);
     } catch (e, stackTrace) {
-      debugPrint('❌ Error approving registration: $e');
-      debugPrint('Stack trace: $stackTrace');
+      debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('❌ EventRegistrationRepository.approveRegistration() FAILED');
+      debugPrint('   Booking ID: $id');
+      debugPrint('   Error: $e');
+      debugPrint('   Stack trace: $stackTrace');
+      debugPrint('═══════════════════════════════════════════════════════════');
+      
       return Failure('Failed to approve registration: $e');
     }
   }
@@ -235,6 +326,45 @@ class EventRegistrationRepository {
           .eq('Id', id);
 
       debugPrint('✅ Registration rejected successfully');
+      
+      // Send notification to student about rejection
+      try {
+        final notificationService = NotificationService();
+        final eventRepository = EventRepository();
+        
+        // Get booking to find student and event
+        final bookingResult = await _supabase
+            .from('tbl_bookings')
+            .select('UserId, EventId')
+            .eq('Id', id)
+            .maybeSingle();
+        
+        if (bookingResult != null) {
+          final studentId = bookingResult['UserId'] as String?;
+          final eventId = bookingResult['EventId'] as String?;
+          
+          if (studentId != null && eventId != null) {
+            // Get event title
+            final eventResult = await eventRepository.getEventById(eventId);
+            if (eventResult.isSuccess && eventResult.data != null) {
+              final eventTitle = eventResult.data!.title;
+              
+              // Send notification to student
+              await notificationService.notifyStudentOfRejection(
+                studentId: studentId,
+                eventTitle: eventTitle,
+                bookingId: id,
+              );
+              
+              debugPrint('✅ Notification sent to student: $studentId');
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Failed to send notification (rejection still successful): $e');
+        // Don't fail rejection if notification fails
+      }
+      
       return const Success(null);
     } catch (e, stackTrace) {
       debugPrint('❌ Error rejecting registration: $e');

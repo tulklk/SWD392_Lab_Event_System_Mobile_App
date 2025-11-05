@@ -12,6 +12,8 @@ import '../admin/admin_dashboard_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../domain/enums/role.dart';
 import '../auth/auth_controller.dart';
+import '../notifications/notification_screen.dart';
+import '../notifications/notification_providers.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -173,14 +175,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ];
     } else {
       // Fallback for logged out users (shouldn't happen due to router guard)
-      screens = [StudentDashboardPage()];
+      // Use at least 2 destinations to satisfy NavigationBar requirement
+      screens = [
+        StudentDashboardPage(),
+        const CalendarScreen(),
+      ];
       destinations = [
         const NavigationDestination(
           icon: Icon(Icons.home_rounded),
           selectedIcon: Icon(Icons.home_rounded),
           label: 'Home',
         ),
+        const NavigationDestination(
+          icon: Icon(Icons.calendar_month_rounded),
+          selectedIcon: Icon(Icons.calendar_month_rounded),
+          label: 'Calendar',
+        ),
       ];
+    }
+
+    // Ensure selectedIndex is valid for the current destinations
+    // Use a local variable to avoid setState in build method
+    final validSelectedIndex = destinations.isEmpty || 
+            _selectedIndex >= destinations.length || 
+            _selectedIndex < 0
+        ? 0
+        : _selectedIndex;
+    
+    // Update state if needed (but only after build completes)
+    if (validSelectedIndex != _selectedIndex && destinations.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _selectedIndex = validSelectedIndex;
+          });
+        }
+      });
     }
 
     return Scaffold(
@@ -248,26 +278,85 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
         actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+          // Notification bell with badge
+          Consumer(
+            builder: (context, ref, child) {
+              final unreadCountAsync = ref.watch(unreadNotificationCountProvider);
+              
+              return Container(
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: IconButton(
-              onPressed: () {},
-              icon: Icon(
-                Icons.notifications_outlined,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    IconButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const NotificationScreen(),
+                          ),
+                        ).then((_) {
+                          // Refresh notifications when returning from screen
+                          refreshNotifications(ref);
+                        });
+                      },
+                      icon: Icon(
+                        Icons.notifications_outlined,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    // Badge
+                    unreadCountAsync.when(
+                      data: (count) {
+                        if (count == 0) return const SizedBox.shrink();
+                        return Positioned(
+                          right: 8,
+                          top: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.surface,
+                                width: 2,
+                              ),
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
+                            ),
+                            child: Center(
+                              child: Text(
+                                count > 99 ? '99+' : count.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, __) => const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
           Container(
             margin: const EdgeInsets.only(right: 16),
@@ -436,23 +525,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
       body: IndexedStack(
-        index: _selectedIndex,
+        index: validSelectedIndex,
         children: screens,
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-          
-          // My Bookings will auto-refresh via didChangeDependencies when tab becomes visible
-          if (isStudent && index == 3) {
-            debugPrint('🔄 Switched to My Bookings tab (index 3)');
-          }
-        },
-        destinations: destinations,
-      ),
+      bottomNavigationBar: destinations.length >= 2
+          ? NavigationBar(
+              selectedIndex: validSelectedIndex,
+              onDestinationSelected: (index) {
+                setState(() {
+                  _selectedIndex = index;
+                });
+                
+                // My Bookings will auto-refresh via didChangeDependencies when tab becomes visible
+                if (isStudent && index == 3) {
+                  debugPrint('🔄 Switched to My Bookings tab (index 3)');
+                }
+              },
+              destinations: destinations,
+            )
+          : null,
     );
   }
 }

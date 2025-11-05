@@ -18,13 +18,18 @@ import '../features/admin/manage_events_screen.dart';
 import '../features/lecturer/lecturer_dashboard_screen.dart';
 import '../features/lecturer/create_event_screen.dart';
 import '../features/lecturer/event_registrations_screen.dart';
+import '../features/notifications/notification_screen.dart';
 import '../features/auth/auth_controller.dart';
+
+// Global navigator key for showing notifications from anywhere
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
   // Watch auth state to trigger router refresh when auth changes
   ref.watch(authControllerProvider);
   
   return GoRouter(
+    navigatorKey: navigatorKey,
     initialLocation: '/splash',
     redirect: (context, state) {
       debugPrint('🔄 Router: Current path = ${state.uri.path}');
@@ -122,6 +127,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/profile',
         name: 'profile',
         builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: '/notifications',
+        name: 'notifications',
+        builder: (context, state) => const NotificationScreen(),
       ),
       GoRoute(
         path: '/labs/:id',

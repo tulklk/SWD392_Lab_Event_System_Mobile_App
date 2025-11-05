@@ -1,9 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/config/supabase_config.dart';
 import '../../domain/models/booking.dart';
 import '../../core/utils/result.dart';
+import '../services/notification_service.dart';
+import '../services/fcm_service.dart';
+import '../repositories/event_repository.dart';
+import '../repositories/user_repository.dart';
 
 final bookingRepositoryProvider = Provider<BookingRepository>((ref) {
   return BookingRepository();
@@ -406,6 +411,62 @@ class BookingRepository {
           .single();
 
       final booking = Booking.fromJson(response as Map<String, dynamic>);
+      
+      // Send notification to lecturer about new booking
+      debugPrint('📨 BookingRepository: Attempting to send notification to lecturer');
+      try {
+        final eventRepository = EventRepository();
+        final userRepository = UserRepository();
+        final notificationService = NotificationService();
+        
+        // Get event details to find lecturer
+        debugPrint('🔍 BookingRepository: Getting event details for eventId: $eventId');
+        final eventResult = await eventRepository.getEventById(eventId);
+        
+        if (eventResult.isSuccess && eventResult.data != null) {
+          final event = eventResult.data!;
+          final lecturerId = event.createdBy;
+          
+          debugPrint('✅ BookingRepository: Found event: ${event.title}');
+          debugPrint('   Lecturer ID (event.createdBy): $lecturerId');
+          
+          // Get student name
+          debugPrint('🔍 BookingRepository: Getting student details for userId: $userId');
+          final studentResult = await userRepository.getUserById(userId);
+          final studentName = studentResult.isSuccess && studentResult.data != null
+              ? (studentResult.data!.fullname ?? 'A student')
+              : 'A student';
+          
+          debugPrint('✅ BookingRepository: Student name: $studentName');
+          
+          // Send notification to lecturer
+          debugPrint('📤 BookingRepository: Sending notification to lecturer...');
+          final notificationResult = await notificationService.notifyLecturerOfBooking(
+            lecturerId: lecturerId,
+            studentName: studentName,
+            eventTitle: event.title,
+            bookingId: bookingId,
+          );
+          
+          if (notificationResult) {
+            debugPrint('✅ BookingRepository: Notification sent successfully to lecturer: $lecturerId');
+          } else {
+            debugPrint('⚠️ BookingRepository: Failed to send notification to lecturer: $lecturerId');
+            debugPrint('   This could be because:');
+            debugPrint('   1. Lecturer has not logged in and initialized FCM');
+            debugPrint('   2. Lecturer has not granted notification permissions');
+            debugPrint('   3. FCM Service Account authentication failed');
+            debugPrint('   4. No FCM token found in tbl_fcm_tokens for lecturer');
+          }
+        } else {
+          debugPrint('❌ BookingRepository: Failed to get event details: ${eventResult.error}');
+        }
+      } catch (e, stackTrace) {
+        debugPrint('❌ BookingRepository: Error sending notification (booking still created): $e');
+        debugPrint('   Stack trace: $stackTrace');
+        // Don't fail booking creation if notification fails
+      }
+      
       return Success(booking);
     } catch (e) {
       return Failure('Failed to create event booking: $e');

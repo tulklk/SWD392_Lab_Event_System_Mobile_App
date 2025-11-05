@@ -6,11 +6,15 @@ import '../../data/services/auth_service.dart';
 import '../../core/utils/result.dart';
 
 class AuthController extends Notifier<AsyncValue<User?>> {
-  late final AuthService _authService;
+  AuthService? _authService;
+
+  AuthService get _service {
+    _authService ??= AuthService();
+    return _authService!;
+  }
 
   @override
   AsyncValue<User?> build() {
-    _authService = AuthService();
     _loadCurrentUser();
     return const AsyncValue.loading();
   }
@@ -23,7 +27,7 @@ class AuthController extends Notifier<AsyncValue<User?>> {
       // Small delay to ensure Supabase has time to restore session
       await Future.delayed(const Duration(milliseconds: 100));
       
-      final result = await _authService.getCurrentUserProfile();
+      final result = await _service.getCurrentUserProfile();
       
       if (result.isSuccess) {
         if (result.data != null) {
@@ -48,14 +52,14 @@ class AuthController extends Notifier<AsyncValue<User?>> {
     required String password,
   }) async {
     try {
-      final result = await _authService.login(
+      final result = await _service.login(
         username: username,
         password: password,
       );
 
       if (result.isSuccess) {
         // Get user profile
-        final profileResult = await _authService.getCurrentUserProfile();
+        final profileResult = await _service.getCurrentUserProfile();
         if (profileResult.isSuccess && profileResult.data != null) {
           final user = profileResult.data!;
           debugPrint('🔐 AuthController: Login successful');
@@ -86,7 +90,7 @@ class AuthController extends Notifier<AsyncValue<User?>> {
     required Role role,
   }) async {
     try {
-      final result = await _authService.register(
+      final result = await _service.register(
         email: email,
         password: password,
         fullname: fullname,
@@ -109,7 +113,7 @@ class AuthController extends Notifier<AsyncValue<User?>> {
   // Sign in with Google
   Future<Result<User>> signInWithGoogle() async {
     try {
-      final result = await _authService.signInWithGoogle();
+      final result = await _service.signInWithGoogle();
 
       if (result.isSuccess && result.data != null) {
         state = AsyncValue.data(result.data);
@@ -125,7 +129,7 @@ class AuthController extends Notifier<AsyncValue<User?>> {
   // Logout
   Future<Result<void>> logout() async {
     try {
-      final result = await _authService.logout();
+      final result = await _service.logout();
       if (result.isSuccess) {
         state = const AsyncValue.data(null);
       }
@@ -138,7 +142,7 @@ class AuthController extends Notifier<AsyncValue<User?>> {
   // Reset password
   Future<Result<void>> resetPassword({required String email}) async {
     try {
-      return await _authService.resetPassword(email: email);
+      return await _service.resetPassword(email: email);
     } catch (e) {
       return Failure('Password reset failed: $e');
     }
@@ -147,7 +151,7 @@ class AuthController extends Notifier<AsyncValue<User?>> {
   // Seed admin account (for development)
   Future<Result<void>> seedAdminAccount() async {
     try {
-      return await _authService.seedAdminAccount();
+      return await _service.seedAdminAccount();
     } catch (e) {
       return Failure('Failed to seed admin account: $e');
     }
