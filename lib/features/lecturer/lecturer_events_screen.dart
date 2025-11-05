@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/room_repository.dart';
 import '../../data/repositories/lab_repository.dart';
@@ -220,7 +221,7 @@ class _EventCard extends ConsumerStatefulWidget {
 }
 
 class _EventCardState extends ConsumerState<_EventCard> {
-  Room? _room;
+  List<Room> _rooms = [];
   Lab? _lab;
   bool _isLoadingRoomLab = false;
 
@@ -234,74 +235,110 @@ class _EventCardState extends ConsumerState<_EventCard> {
     setState(() => _isLoadingRoomLab = true);
     
     try {
-      debugPrint('🔄 Loading room and lab for event: ${widget.event.id}');
+      debugPrint('🔄 Loading rooms and lab for event: ${widget.event.id}');
       final eventRepository = ref.read(eventRepositoryProvider);
       final roomRepository = RoomRepository();
       final labRepository = LabRepository();
       
-      // Get roomId and labId for event
-      final infoResult = await eventRepository.getEventRoomAndLabInfo(widget.event.id);
+      // Get all room IDs for event (for entire lab booking)
+      final roomIdsResult = await eventRepository.getEventRoomIds(widget.event.id);
       
-      debugPrint('   Info result success: ${infoResult.isSuccess}');
-      debugPrint('   Data: ${infoResult.data}');
+      debugPrint('   Room IDs result success: ${roomIdsResult.isSuccess}');
+      debugPrint('   Room IDs: ${roomIdsResult.data}');
       
-      if (infoResult.isSuccess && infoResult.data != null) {
-        final roomId = infoResult.data!['roomId'];
-        final labId = infoResult.data!['labId'];
-        
-        debugPrint('   Extracted roomId: $roomId, labId: $labId');
-        
-        // Load Room
-        if (roomId != null && roomId.isNotEmpty) {
+      List<Room> loadedRooms = [];
+      String? labId;
+      
+      if (roomIdsResult.isSuccess && roomIdsResult.data != null && roomIdsResult.data!.isNotEmpty) {
+        // Load all rooms
+        for (final roomId in roomIdsResult.data!) {
           debugPrint('   Loading room: $roomId');
           final roomResult = await roomRepository.getRoomById(roomId);
           if (roomResult.isSuccess && roomResult.data != null) {
             debugPrint('   ✅ Room loaded: ${roomResult.data!.name}');
-            if (mounted) {
-              setState(() => _room = roomResult.data);
+            loadedRooms.add(roomResult.data!);
+            
+            // Get labId from first room
+            if (labId == null) {
+              // Get labId from room's labId (if available in room model)
+              // Otherwise, we'll query from room_repository
+              final roomInfoResult = await roomRepository.getRoomById(roomId);
+              if (roomInfoResult.isSuccess && roomInfoResult.data != null) {
+                // Try to get labId from tbl_rooms
+                try {
+                  final supabase = Supabase.instance.client;
+                  final roomResponse = await supabase
+                      .from('tbl_rooms')
+                      .select('LabId')
+                      .eq('Id', roomId)
+                      .maybeSingle();
+                  if (roomResponse != null && roomResponse['LabId'] != null) {
+                    labId = roomResponse['LabId']?.toString();
+                    debugPrint('   ✅ Found LabId from room: $labId');
+                  }
+                } catch (e) {
+                  debugPrint('   ⚠️ Could not get LabId from room: $e');
+                }
+              }
             }
           } else {
             debugPrint('   ❌ Failed to load room: ${roomResult.error}');
           }
-        } else {
-          debugPrint('   ⚠️ No roomId found for event');
-        }
-        
-        // Load Lab
-        if (labId != null && labId.isNotEmpty) {
-          debugPrint('   Loading lab: $labId');
-          final labResult = await labRepository.getLabById(labId);
-          if (labResult.isSuccess && labResult.data != null) {
-            debugPrint('   ✅ Lab loaded from Hive: ${labResult.data!.name}');
-            if (mounted) {
-              setState(() => _lab = labResult.data);
-            }
-          } else {
-            debugPrint('   ⚠️ Lab not in Hive, trying Supabase...');
-            // Try from Supabase if not in Hive
-            final labsResult = await labRepository.getLabsFromSupabase();
-            if (labsResult.isSuccess && labsResult.data != null) {
-              try {
-                final lab = labsResult.data!.firstWhere(
-                  (l) => l.id == labId,
-                );
-                debugPrint('   ✅ Lab loaded from Supabase: ${lab.name}');
-                if (mounted) {
-                  setState(() => _lab = lab);
-                }
-              } catch (e) {
-                debugPrint('   ❌ Lab with id $labId not found in Supabase');
-              }
-            }
-          }
-        } else {
-          debugPrint('   ⚠️ No labId found for event');
         }
       } else {
-        debugPrint('   ❌ Failed to get event room/lab info: ${infoResult.error}');
+        // Fallback: try to get single roomId and labId (for single room booking)
+        debugPrint('   ⚠️ No room IDs found, trying fallback method...');
+        final infoResult = await eventRepository.getEventRoomAndLabInfo(widget.event.id);
+        
+        if (infoResult.isSuccess && infoResult.data != null) {
+          final roomId = infoResult.data!['roomId'];
+          labId = infoResult.data!['labId'];
+          
+          if (roomId != null && roomId.isNotEmpty) {
+            debugPrint('   Loading room: $roomId');
+            final roomResult = await roomRepository.getRoomById(roomId);
+            if (roomResult.isSuccess && roomResult.data != null) {
+              debugPrint('   ✅ Room loaded: ${roomResult.data!.name}');
+              loadedRooms.add(roomResult.data!);
+            }
+          }
+        }
+      }
+      
+      // Load Lab
+      if (labId != null && labId.isNotEmpty) {
+        debugPrint('   Loading lab: $labId');
+        final labResult = await labRepository.getLabById(labId);
+        if (labResult.isSuccess && labResult.data != null) {
+          debugPrint('   ✅ Lab loaded from Hive: ${labResult.data!.name}');
+          if (mounted) {
+            setState(() => _lab = labResult.data);
+          }
+        } else {
+          debugPrint('   ⚠️ Lab not in Hive, trying Supabase...');
+          // Try from Supabase if not in Hive
+          final labsResult = await labRepository.getLabsFromSupabase();
+          if (labsResult.isSuccess && labsResult.data != null) {
+            try {
+              final lab = labsResult.data!.firstWhere(
+                (l) => l.id == labId,
+              );
+              debugPrint('   ✅ Lab loaded from Supabase: ${lab.name}');
+              if (mounted) {
+                setState(() => _lab = lab);
+              }
+            } catch (e) {
+              debugPrint('   ❌ Lab with id $labId not found in Supabase');
+            }
+          }
+        }
+      }
+      
+      if (mounted) {
+        setState(() => _rooms = loadedRooms);
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ Error loading room/lab: $e');
+      debugPrint('❌ Error loading rooms/lab: $e');
       debugPrint('   Stack trace: $stackTrace');
     } finally {
       if (mounted) {
@@ -462,9 +499,12 @@ class _EventCardState extends ConsumerState<_EventCard> {
                 ],
               ),
               // Lab and Room info
-              if (_lab != null || _room != null) ...[
+              if (_lab != null || _rooms.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     if (_lab != null) ...[
                       Icon(Icons.science, size: 16, color: Colors.orange[700]),
@@ -477,24 +517,15 @@ class _EventCardState extends ConsumerState<_EventCard> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      if (_room != null) ...[
-                        const SizedBox(width: 12),
-                        Icon(Icons.room, size: 16, color: Colors.blue[700]),
-                        const SizedBox(width: 4),
-                        Text(
-                          _room!.name,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.blue[700],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ] else if (_room != null) ...[
+                    ],
+                    if (_rooms.isNotEmpty) ...[
+                      if (_lab != null) const SizedBox(width: 8),
                       Icon(Icons.room, size: 16, color: Colors.blue[700]),
                       const SizedBox(width: 4),
                       Text(
-                        _room!.name,
+                        _rooms.length == 1
+                            ? _rooms.first.name
+                            : '${_rooms.length} rooms: ${_rooms.map((r) => r.name).join(', ')}',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.blue[700],
