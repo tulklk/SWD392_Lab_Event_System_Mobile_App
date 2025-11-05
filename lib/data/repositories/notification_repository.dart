@@ -1,11 +1,13 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/config/supabase_config.dart';
 import '../../core/utils/result.dart';
 import '../../domain/models/notification.dart' as model;
 
 class NotificationRepository {
   final SupabaseClient _supabase = Supabase.instance.client;
+  final _uuid = const Uuid();
 
   // Get all notifications
   Future<Result<List<model.Notification>>> getAllNotifications() async {
@@ -76,10 +78,12 @@ class NotificationRepository {
   }) async {
     try {
       final now = DateTime.now();
+      final notificationId = _uuid.v4(); // Generate UUID for notification
       
       final response = await _supabase
           .from('tbl_notifications')
           .insert({
+            'Id': notificationId, // Add ID field
             'Title': title,
             'Content': content,
             'TargetGroup': targetGroup,
@@ -150,16 +154,191 @@ class NotificationRepository {
     }
   }
 
-  // Mark notification as read (track in separate table if needed)
+  // Mark notification as read for a user
   Future<Result<void>> markAsRead(String notificationId, String userId) async {
     try {
-      // If you have a notification_reads table, insert here
-      // For now, we'll just return success
+      final now = DateTime.now();
+      
+      // Check if already read
+      final existing = await _supabase
+          .from('tbl_notification_reads')
+          .select('Id')
+          .eq('NotificationId', notificationId)
+          .eq('UserId', userId)
+          .maybeSingle();
+
+      if (existing == null) {
+        // Insert new read record
+        await _supabase.from('tbl_notification_reads').insert({
+          'NotificationId': notificationId,
+          'UserId': userId,
+          'ReadAt': now.toIso8601String(),
+          'CreatedAt': now.toIso8601String(),
+          'LastUpdatedAt': now.toIso8601String(),
+        });
+      } else {
+        // Update read timestamp
+        await _supabase
+            .from('tbl_notification_reads')
+            .update({
+              'ReadAt': now.toIso8601String(),
+              'LastUpdatedAt': now.toIso8601String(),
+            })
+            .eq('NotificationId', notificationId)
+            .eq('UserId', userId);
+      }
+
       return const Success(null);
     } catch (e) {
       return Failure('Failed to mark notification as read: $e');
     }
   }
+
+  // Mark all notifications as read for a user
+  Future<Result<void>> markAllAsRead(String userId, List<String> notificationIds) async {
+    try {
+      final now = DateTime.now();
+      
+      for (final notificationId in notificationIds) {
+        final existing = await _supabase
+            .from('tbl_notification_reads')
+            .select('Id')
+            .eq('NotificationId', notificationId)
+            .eq('UserId', userId)
+            .maybeSingle();
+
+        if (existing == null) {
+          await _supabase.from('tbl_notification_reads').insert({
+            'NotificationId': notificationId,
+            'UserId': userId,
+            'ReadAt': now.toIso8601String(),
+            'CreatedAt': now.toIso8601String(),
+            'LastUpdatedAt': now.toIso8601String(),
+          });
+        }
+      }
+
+      return const Success(null);
+    } catch (e) {
+      return Failure('Failed to mark all notifications as read: $e');
+    }
+  }
+
+  // Get unread count for a user
+  Future<Result<int>> getUnreadCount(String userId, String userRole) async {
+    try {
+      final now = DateTime.now();
+      
+      // Get all active notifications for user's role
+      final notifications = await _supabase
+          .from('tbl_notifications')
+          .select('Id')
+          .eq('Status', 1)
+          .or('TargetGroup.eq.all,TargetGroup.eq.$userRole')
+          .lte('StartDate', now.toIso8601String())
+          .or('EndDate.is.null,EndDate.gte.${now.toIso8601String()}');
+
+      if (notifications.isEmpty) {
+        return const Success(0);
+      }
+
+      final notificationIds = (notifications as List)
+          .map((n) => n['Id'] as String)
+          .toList();
+
+      // Get read notifications for this user
+      // Query each notification ID individually since Supabase may not support in_ for all cases
+      final readIds = <String>{};
+      for (final notificationId in notificationIds) {
+        try {
+          final readResponse = await _supabase
+              .from('tbl_notification_reads')
+              .select('NotificationId')
+              .eq('UserId', userId)
+              .eq('NotificationId', notificationId)
+              .maybeSingle();
+          
+          if (readResponse != null) {
+            readIds.add(notificationId);
+          }
+        } catch (e) {
+          // Skip if error
+          continue;
+        }
+      }
+
+      final unreadCount = notificationIds.length - readIds.length;
+      return Success(unreadCount);
+    } catch (e) {
+      return Failure('Failed to get unread count: $e');
+    }
+  }
+
+  // Get notifications for user with read status
+  Future<Result<List<Map<String, dynamic>>>> getNotificationsForUserWithReadStatus(
+    String userId,
+    String userRole,
+  ) async {
+    try {
+      final now = DateTime.now();
+      
+      // Get all active notifications for user's role
+      final notifications = await _supabase
+          .from('tbl_notifications')
+          .select()
+          .eq('Status', 1)
+          .or('TargetGroup.eq.all,TargetGroup.eq.$userRole')
+          .lte('StartDate', now.toIso8601String())
+          .or('EndDate.is.null,EndDate.gte.${now.toIso8601String()}')
+          .order('CreatedAt', ascending: false);
+
+      if (notifications.isEmpty) {
+        return Success([]);
+      }
+
+      final notificationIds = (notifications as List)
+          .map((n) => (n as Map<String, dynamic>)['Id'] as String)
+          .toList();
+
+      // Get read notifications for this user
+      // Query each notification ID individually since Supabase may not support in_ for all cases
+      final readMap = <String, DateTime>{};
+      for (final notificationId in notificationIds) {
+        try {
+          final readResponse = await _supabase
+              .from('tbl_notification_reads')
+              .select('NotificationId, ReadAt')
+              .eq('UserId', userId)
+              .eq('NotificationId', notificationId)
+              .maybeSingle();
+          
+          if (readResponse != null) {
+            final readAt = DateTime.parse(readResponse['ReadAt'] as String);
+            readMap[notificationId] = readAt;
+          }
+        } catch (e) {
+          // Skip if error
+          continue;
+        }
+      }
+
+      // Combine notifications with read status
+      final result = (notifications as List).map((notification) {
+        final notificationMap = notification as Map<String, dynamic>;
+        final notificationId = notificationMap['Id'] as String;
+        return {
+          ...notificationMap,
+          'IsRead': readMap.containsKey(notificationId),
+          'ReadAt': readMap[notificationId],
+        };
+      }).toList();
+
+      return Success(result);
+    } catch (e) {
+      return Failure('Failed to get notifications with read status: $e');
+    }
+  }
+
 }
 
 // Provider for NotificationRepository

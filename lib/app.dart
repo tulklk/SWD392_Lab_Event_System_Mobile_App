@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'core/theme/app_theme.dart';
 import 'core/l10n/l10n.dart';
 import 'core/config/supabase_config.dart';
@@ -11,6 +12,7 @@ import 'data/repositories/lab_repository.dart';
 import 'data/repositories/event_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'data/repositories/booking_repository.dart';
+import 'data/services/fcm_service.dart';
 import 'features/auth/auth_controller.dart';
 import 'routes/app_router.dart';
 
@@ -61,6 +63,20 @@ class _AppInitializerState extends ConsumerState<AppInitializer> {
 
   Future<void> _initializeApp() async {
     try {
+      // Initialize Firebase
+      try {
+        await Firebase.initializeApp();
+        debugPrint('✅ Firebase initialized successfully');
+        
+        // Initialize FCM
+        final fcmService = FCMService();
+        await fcmService.initialize();
+        debugPrint('✅ FCM initialized successfully');
+      } catch (e) {
+        debugPrint('⚠️ Firebase initialization failed (may not be configured): $e');
+        // Continue without Firebase if not configured
+      }
+      
       // Initialize Supabase with auth persistence (session persistence is enabled by default)
       await Supabase.initialize(
         url: SupabaseConfig.supabaseUrl,
@@ -74,13 +90,32 @@ class _AppInitializerState extends ConsumerState<AppInitializer> {
       
       // Setup auth state listener - CRITICAL for session persistence!
       // This listens to auth changes and updates the app state
-      Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
         final session = data.session;
         final event = data.event;
         
         debugPrint('🔔 Auth state changed: $event');
         if (session != null) {
           debugPrint('📱 Session active: ${session.user.email}');
+          
+          // IMPORTANT: Save FCM token when user logs in
+          // This ensures token is saved even if FCM was initialized before login
+          try {
+            final fcmService = FCMService();
+            final currentToken = fcmService.currentToken;
+            if (currentToken != null) {
+              debugPrint('🔄 Saving FCM token after login for user: ${session.user.id}');
+              // Force save token by calling internal method
+              // We'll add a public method for this
+              await fcmService.saveTokenForCurrentUser();
+            } else {
+              debugPrint('⚠️ No FCM token available to save after login');
+              // Try to get token again
+              await fcmService.refreshToken();
+            }
+          } catch (e) {
+            debugPrint('⚠️ Failed to save FCM token after login: $e');
+          }
         } else {
           debugPrint('📱 No active session');
         }
@@ -100,6 +135,16 @@ class _AppInitializerState extends ConsumerState<AppInitializer> {
       if (session != null) {
         debugPrint('✅ Session recovered: User ${session.user.email}');
         debugPrint('📅 Session expires at: ${session.expiresAt}');
+        
+        // IMPORTANT: Save FCM token if we have a session on app startup
+        // This handles the case where FCM was initialized before login
+        try {
+          final fcmService = FCMService();
+          await Future.delayed(const Duration(milliseconds: 500)); // Wait a bit more
+          await fcmService.saveTokenForCurrentUser();
+        } catch (e) {
+          debugPrint('⚠️ Failed to save FCM token on startup: $e');
+        }
       } else {
         debugPrint('ℹ️ No existing session found');
       }

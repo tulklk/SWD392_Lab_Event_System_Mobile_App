@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../auth/auth_controller.dart';
 import '../../domain/enums/role.dart';
+import '../../core/utils/notification_helper.dart';
+import '../../data/services/fcm_service.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -207,6 +209,107 @@ class ProfileScreen extends ConsumerWidget {
             ),
             
             const SizedBox(height: 32),
+            
+            // Debug Section (for testing notifications)
+            if (currentUser.role == Role.student) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '🔧 Notification Debug',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          // Check FCM token
+                          await NotificationHelper.checkCurrentUserFCMToken();
+                          
+                          // Refresh FCM token
+                          final fcmService = FCMService();
+                          await fcmService.refreshToken();
+                          
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('✅ Checked FCM token. See console logs for details.'),
+                                backgroundColor: Colors.blue,
+                                duration: Duration(seconds: 3),
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Check FCM Token'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          // Test notification
+                          final result = await NotificationHelper.testNotificationToUser(
+                            currentUser.id,
+                            title: 'Test Notification',
+                            body: 'This is a test notification from Profile Screen',
+                          );
+                          
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  result 
+                                    ? '✅ Test notification sent! Check your notifications.'
+                                    : '❌ Failed to send test notification. Check console logs.',
+                                ),
+                                backgroundColor: result ? Colors.green : Colors.red,
+                                duration: const Duration(seconds: 3),
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.notifications_active, size: 18),
+                        label: const Text('Test Notification'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
             
             // Logout Button
             SizedBox(

@@ -319,11 +319,23 @@ class _EventRegistrationsScreenState extends ConsumerState<EventRegistrationsScr
   }
 
   Future<void> _handleApprove(String id) async {
+    debugPrint('🎯 EventRegistrationsScreen: _handleApprove called with ID: $id');
+    debugPrint('   Event ID: ${widget.eventId}');
+    
     final repo = ref.read(eventRegistrationRepositoryProvider);
+    debugPrint('✅ EventRegistrationsScreen: Repository obtained, calling approveRegistration...');
+    
     final result = await repo.approveRegistration(id);
+    
+    debugPrint('📋 EventRegistrationsScreen: approveRegistration result:');
+    debugPrint('   Success: ${result.isSuccess}');
+    if (!result.isSuccess) {
+      debugPrint('   Error: ${result.error}');
+    }
 
     if (mounted) {
       if (result.isSuccess) {
+        debugPrint('✅ EventRegistrationsScreen: Approval successful, showing success message');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✅ Registration approved'),
@@ -332,6 +344,7 @@ class _EventRegistrationsScreenState extends ConsumerState<EventRegistrationsScr
         );
         ref.invalidate(eventRegistrationsProvider(widget.eventId));
       } else {
+        debugPrint('❌ EventRegistrationsScreen: Approval failed, showing error message');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result.error ?? 'Failed to approve'),
@@ -339,6 +352,8 @@ class _EventRegistrationsScreenState extends ConsumerState<EventRegistrationsScr
           ),
         );
       }
+    } else {
+      debugPrint('⚠️ EventRegistrationsScreen: Widget not mounted, cannot show message');
     }
   }
 
