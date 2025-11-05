@@ -70,7 +70,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
       ];
     } else if (isLecturer) {
-      // Lecturer: Home, Calendar, Labs, Bookings Management, and Lab Management
+      // Lecturer: Home, Calendar, Labs, and Lab Management
       screens = [
         LecturerDashboardPage(
           onTabChange: (index) {
@@ -81,7 +81,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         const CalendarScreen(),
         const LabsScreen(),
-        const MyBookingsScreen(),
         const AdminDashboardScreen(),
       ];
       destinations = [
@@ -99,11 +98,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           icon: Icon(Icons.science_rounded),
           selectedIcon: Icon(Icons.science_rounded),
           label: 'Labs',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.book_online_rounded),
-          selectedIcon: Icon(Icons.book_online_rounded),
-          label: 'Bookings',
         ),
         const NavigationDestination(
           icon: Icon(Icons.manage_accounts_rounded),
