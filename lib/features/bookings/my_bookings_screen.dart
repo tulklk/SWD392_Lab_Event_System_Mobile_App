@@ -56,32 +56,25 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    
-    // Watch the refresh provider to detect when a booking is created
-    final currentRefreshTrigger = ref.watch(myBookingsRefreshProvider);
-    
-    // Initialize trigger on first call if needed
-    if (_lastRefreshTrigger == 0 && currentRefreshTrigger > 0) {
-      _lastRefreshTrigger = currentRefreshTrigger;
-    }
-    
-    // If refresh trigger changed (booking was created), force refresh immediately
-    if (currentRefreshTrigger != _lastRefreshTrigger) {
-      debugPrint('🔄 My Bookings: Refresh triggered by booking creation (trigger: $currentRefreshTrigger)');
-      _lastRefreshTrigger = currentRefreshTrigger;
-      // Force refresh immediately when booking is created
+  void didUpdateWidget(MyBookingsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // When widget key changes (triggered by refresh), reload bookings
+    if (widget.key != oldWidget.key) {
+      debugPrint('🔄 My Bookings: Widget key changed, refreshing...');
       _lastRefreshTime = null; // Reset to force refresh
       _refreshData();
-    } else {
-      // Otherwise, use time-based refresh for tab visibility
-      final now = DateTime.now();
-      if (_lastRefreshTime == null || 
-          now.difference(_lastRefreshTime!).inSeconds > 2) {
-        debugPrint('🔄 My Bookings: Dependencies changed, refreshing...');
-        _refreshData();
-      }
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh when returning to this screen (e.g., when tab becomes visible)
+    final now = DateTime.now();
+    if (_lastRefreshTime == null || 
+        now.difference(_lastRefreshTime!).inSeconds > 2) {
+      debugPrint('🔄 My Bookings: Dependencies changed, refreshing...');
+      _refreshData();
     }
   }
 

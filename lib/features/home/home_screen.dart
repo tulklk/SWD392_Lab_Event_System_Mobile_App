@@ -22,6 +22,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _selectedIndex = 0;
+  int _bookingsRefreshTrigger = 0; // Counter to trigger refresh for My Bookings
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +44,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       });
     }
     
+    // Watch for booking refresh trigger and increment local counter
+    final bookingRefreshTrigger = ref.watch(myBookingsRefreshProvider);
+    if (bookingRefreshTrigger > 0 && isStudent) {
+      // When booking is created, increment local trigger to force rebuild
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _bookingsRefreshTrigger != bookingRefreshTrigger) {
+          setState(() {
+            _bookingsRefreshTrigger = bookingRefreshTrigger;
+          });
+        }
+      });
+    }
+    
     // Define screens and navigation based on role
     List<Widget> screens = [];
     List<NavigationDestination> destinations = [];
@@ -59,7 +73,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         const CalendarScreen(),
         const StudentEventsScreen(),
-        MyBookingsScreen(),
+        MyBookingsScreen(
+          key: ValueKey(_bookingsRefreshTrigger), // Rebuild when trigger changes
+        ),
       ];
       destinations = [
         const NavigationDestination(
