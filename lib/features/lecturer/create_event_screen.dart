@@ -51,6 +51,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   File? _selectedImage;
   final ImagePicker _imagePicker = ImagePicker();
 
+  // Booking mode: true = Book entire Lab, false = Book by Room
+  bool _bookEntireLab = false;
+  
   // Lab, Room and Slot selection
   final LabRepository _labRepository = LabRepository();
   final RoomRepository _roomRepository = RoomRepository();
@@ -63,6 +66,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   List<Booking> _existingBookings = [];
   Lab? _selectedLab;
   Room? _selectedRoom;
+  List<Room> _selectedRooms = []; // For entire Lab booking
   Set<String> _selectedSlotIds = {}; // Set để lưu các slot IDs đã chọn
   
   bool _isLoadingLabs = false;
@@ -105,6 +109,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       setState(() {
         _rooms = [];
         _selectedRoom = null;
+        _selectedRooms = [];
         _availableSlots = [];
         _selectedSlotIds.clear();
       });
@@ -126,6 +131,18 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         _isLoadingRooms = false;
       });
       
+      // If booking entire lab, auto-select all rooms
+      if (_bookEntireLab && _rooms.isNotEmpty) {
+        setState(() {
+          _selectedRooms = List<Room>.from(_rooms);
+        });
+        debugPrint('✅ Auto-selected ${_selectedRooms.length} rooms for entire lab booking');
+      } else {
+        setState(() {
+          _selectedRooms = [];
+        });
+      }
+      
       if (_rooms.isEmpty && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -140,6 +157,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       setState(() {
         _isLoadingRooms = false;
         _rooms = []; // Clear rooms on error
+        _selectedRooms = [];
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -154,7 +172,25 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   }
 
   Future<void> _loadAvailableSlots() async {
-    if (_selectedRoom == null || _startDate == null) {
+    if (_startDate == null) {
+      setState(() {
+        _availableSlots = [];
+        _selectedSlotIds.clear();
+      });
+      return;
+    }
+    
+    // For book by room mode, need selected room
+    if (!_bookEntireLab && _selectedRoom == null) {
+      setState(() {
+        _availableSlots = [];
+        _selectedSlotIds.clear();
+      });
+      return;
+    }
+    
+    // For book entire lab mode, need selected rooms
+    if (_bookEntireLab && _selectedRooms.isEmpty) {
       setState(() {
         _availableSlots = [];
         _selectedSlotIds.clear();
@@ -167,18 +203,56 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
     // Get day of week (1 = Monday, 7 = Sunday)
     final dayOfWeek = _startDate!.weekday;
     
-    // Load all slots for this room on this day of week
-    final slotsResult = await _roomSlotRepository.getSlotsByRoomId(_selectedRoom!.id);
+    List<RoomSlot> allSlots = [];
+    List<Booking> existingBookings = [];
     
-    if (slotsResult.isSuccess) {
-      final allSlots = slotsResult.data!
-          .where((slot) => slot.dayOfWeek == dayOfWeek)
-          .toList();
+    if (_bookEntireLab) {
+      // For entire lab booking: show ALL slots from ALL rooms, grouped by room
+      // Load all slots and bookings for all rooms
+      for (final room in _selectedRooms) {
+        // Load slots for this room
+        final slotsResult = await _roomSlotRepository.getSlotsByRoomId(room.id);
+        if (slotsResult.isSuccess) {
+          final roomSlots = slotsResult.data!
+              .where((slot) => slot.dayOfWeek == dayOfWeek)
+              .toList();
+          allSlots.addAll(roomSlots);
+        }
+        
+        // Load bookings for this room
+        final bookingsResult = await _bookingRepository.getBookingsForLab(room.id);
+        if (bookingsResult.isSuccess) {
+          final roomBookings = bookingsResult.data!.where((booking) {
+            final bookingDate = DateTime(
+              booking.startTime.year,
+              booking.startTime.month,
+              booking.startTime.day,
+            );
+            final selectedDateOnly = DateTime(
+              _startDate!.year,
+              _startDate!.month,
+              _startDate!.day,
+            );
+            return bookingDate.isAtSameMomentAs(selectedDateOnly) && 
+                   !booking.isCancelled && 
+                   !booking.isRejected;
+          }).toList();
+          existingBookings.addAll(roomBookings);
+        }
+      }
+    } else {
+      // Load all slots for this room on this day of week
+      final slotsResult = await _roomSlotRepository.getSlotsByRoomId(_selectedRoom!.id);
+      
+      if (slotsResult.isSuccess) {
+        allSlots = slotsResult.data!
+            .where((slot) => slot.dayOfWeek == dayOfWeek)
+            .toList();
+      }
       
       // Load existing bookings for this room and date
       final bookingsResult = await _bookingRepository.getBookingsForLab(_selectedRoom!.id);
       
-      List<Booking> existingBookings = [];
       if (bookingsResult.isSuccess) {
         // Filter bookings for selected date
         existingBookings = bookingsResult.data!.where((booking) {
@@ -197,24 +271,14 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                  !booking.isRejected;
         }).toList();
       }
-      
-      if (mounted) {
-        setState(() {
-          _availableSlots = allSlots;
-          _existingBookings = existingBookings;
-          _isLoadingSlots = false;
-        });
-      }
-    } else {
-      setState(() => _isLoadingSlots = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(slotsResult.error ?? 'Failed to load slots'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    }
+    
+    if (mounted) {
+      setState(() {
+        _availableSlots = allSlots;
+        _existingBookings = existingBookings;
+        _isLoadingSlots = false;
+      });
     }
   }
 
@@ -238,9 +302,16 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         slot.endTime.minute,
       );
       
-      // Check if booking overlaps with slot
-      return (booking.startTime.isBefore(slotEnd) && booking.endTime.isAfter(slotStart));
+      // Check if booking overlaps with slot and is for the same room
+      final overlaps = booking.startTime.isBefore(slotEnd) && booking.endTime.isAfter(slotStart);
+      return overlaps && booking.roomId == slot.roomId;
     });
+  }
+  
+  // Check if a slot can be selected (just check if this specific slot is not booked)
+  bool _canSelectSlot(RoomSlot slot) {
+    // Only check if this specific slot is booked, allow booking individual rooms
+    return !_isSlotBooked(slot);
   }
 
   void _toggleSlotSelection(String slotId) {
@@ -298,10 +369,21 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   }
 
   Future<void> _selectStartDate() async {
-    if (_selectedRoom == null) {
+    // Validate based on booking mode
+    if (!_bookEntireLab && _selectedRoom == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select a room first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    if (_bookEntireLab && _selectedRooms.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a lab first'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -508,10 +590,21 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       return;
     }
 
-    if (_selectedRoom == null) {
+    // Validate room selection based on booking mode
+    if (!_bookEntireLab && _selectedRoom == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select a room'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_bookEntireLab && _selectedRooms.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No rooms available in this lab. Please select another lab.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -641,6 +734,33 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         return;
       }
       
+      // Collect room slot IDs based on booking mode
+      List<String> allSlotIds = [];
+      
+      if (_bookEntireLab) {
+        // For entire lab booking, collect slots from all selected rooms
+        if (_selectedSlotIds.isNotEmpty) {
+          // If slots are selected, use them (they should be from all rooms)
+          allSlotIds = _selectedSlotIds.toList();
+        } else {
+          // If no slots selected, get all slots for all rooms on the selected date
+          final dayOfWeek = _startDate!.weekday;
+          for (final room in _selectedRooms) {
+            final slotsResult = await _roomSlotRepository.getSlotsByRoomId(room.id);
+            if (slotsResult.isSuccess) {
+              final roomSlots = slotsResult.data!
+                  .where((slot) => slot.dayOfWeek == dayOfWeek)
+                  .map((slot) => slot.id)
+                  .toList();
+              allSlotIds.addAll(roomSlots);
+            }
+          }
+        }
+      } else {
+        // For single room booking, use selected slots
+        allSlotIds = _selectedSlotIds.toList();
+      }
+
       final result = await eventRepository.createEvent(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
@@ -652,8 +772,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         capacity: capacityValue,
         imageUrl: imageUrl,
         labId: _selectedLab?.id,
-        roomId: _selectedRoom?.id,
-        roomSlotIds: _selectedSlotIds.isNotEmpty ? _selectedSlotIds.toList() : null,
+        roomId: _bookEntireLab ? null : _selectedRoom?.id, // Only set roomId for single room booking
+        roomSlotIds: allSlotIds.isNotEmpty ? allSlotIds : null,
       );
 
       setState(() {
@@ -752,6 +872,70 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                     const Divider(),
                     const SizedBox(height: 16),
 
+                    // Booking Mode Selection
+                    Text(
+                      'Booking Mode',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Column(
+                        children: [
+                          RadioListTile<bool>(
+                            title: const Text('Book Entire Lab'),
+                            subtitle: const Text('Automatically book all rooms in the lab'),
+                            value: true,
+                            groupValue: _bookEntireLab,
+                            onChanged: (value) {
+                              setState(() {
+                                _bookEntireLab = value ?? false;
+                                _selectedRoom = null;
+                                _selectedRooms = [];
+                                _availableSlots = [];
+                                _selectedSlotIds.clear();
+                                _startDate = null;
+                              });
+                              if (_selectedLab != null) {
+                                _loadRooms();
+                              }
+                            },
+                            activeColor: const Color(0xFFFF6600),
+                          ),
+                          const Divider(height: 1),
+                          RadioListTile<bool>(
+                            title: const Text('Book by Room'),
+                            subtitle: const Text('Select specific room and time slots'),
+                            value: false,
+                            groupValue: _bookEntireLab,
+                            onChanged: (value) {
+                              setState(() {
+                                _bookEntireLab = value ?? false;
+                                _selectedRoom = null;
+                                _selectedRooms = [];
+                                _availableSlots = [];
+                                _selectedSlotIds.clear();
+                                _startDate = null;
+                              });
+                              if (_selectedLab != null) {
+                                _loadRooms();
+                              }
+                            },
+                            activeColor: const Color(0xFFFF6600),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
                     // Lab Selection
                     Text(
                       'Select Lab',
@@ -806,6 +990,7 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                                   setState(() {
                                     _selectedLab = newValue;
                                     _selectedRoom = null;
+                                    _selectedRooms = [];
                                     _availableSlots = [];
                                     _selectedSlotIds.clear();
                                     _startDate = null;
@@ -852,8 +1037,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                             ),
                           ),
 
-                    // Room Selection (only show after Lab is selected)
-                    if (_selectedLab != null) ...[
+                    // Room Selection (only show after Lab is selected and not booking entire lab)
+                    if (_selectedLab != null && !_bookEntireLab) ...[
                       const SizedBox(height: 16),
                       Text(
                         'Select Room',
@@ -949,6 +1134,30 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                                 ),
                               ),
                             ),
+                    ] else if (_selectedLab != null && _bookEntireLab) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.green[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.green[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check_circle_outline, color: Colors.green[700], size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _selectedRooms.isEmpty 
+                                    ? 'Loading rooms...'
+                                    : 'All ${_selectedRooms.length} room(s) in ${_selectedLab!.name} will be booked',
+                                style: TextStyle(color: Colors.green[900], fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ] else if (!_isLoadingLabs) ...[
                       const SizedBox(height: 8),
                       Container(
@@ -973,8 +1182,8 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                       ),
                     ],
 
-                    // Room Slots Selection (only show after Room and Date are selected)
-                    if (_selectedRoom != null && _startDate != null) ...[
+                    // Room Slots Selection (show after selection and Date are selected)
+                    if (((!_bookEntireLab && _selectedRoom != null) || (_bookEntireLab && _selectedRooms.isNotEmpty)) && _startDate != null) ...[
                       const SizedBox(height: 16),
                       Text(
                         'Available Time Slots (${_startDate != null ? dateFormat.format(_startDate!) : ""})',
@@ -1009,7 +1218,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Text(
-                                          'No available slots for this room on ${dateFormat.format(_startDate!)}',
+                                          _bookEntireLab
+                                              ? 'No available slots for selected rooms on ${dateFormat.format(_startDate!)}'
+                                              : 'No available slots for this room on ${dateFormat.format(_startDate!)}',
                                           style: TextStyle(color: Colors.orange[900]),
                                         ),
                                       ),
@@ -1039,7 +1250,9 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Text(
-                                                'Select one or more time slots for your event',
+                                                _bookEntireLab
+                                                    ? 'Select time slots for all rooms in ${_selectedLab?.name ?? "the lab"}'
+                                                    : 'Select one or more time slots for your event',
                                                 style: TextStyle(
                                                   fontSize: 12,
                                                   color: Colors.grey[700],
@@ -1049,99 +1262,236 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                                           ],
                                         ),
                                       ),
-                                      ..._availableSlots.map((slot) {
-                                        final isBooked = _isSlotBooked(slot);
-                                        final isSelected = _selectedSlotIds.contains(slot.id);
-                                        final timeFormat = DateFormat('HH:mm');
-                                        
-                                        return InkWell(
-                                          onTap: isBooked ? null : () => _toggleSlotSelection(slot.id),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                            decoration: BoxDecoration(
-                                              color: isSelected
-                                                  ? Colors.blue[50]
-                                                  : isBooked
-                                                      ? Colors.red[50]
-                                                      : Colors.white,
-                                              border: Border(
-                                                bottom: BorderSide(color: Colors.grey[200]!),
-                                                left: BorderSide(
-                                                  color: isSelected
-                                                      ? Colors.blue
-                                                      : Colors.transparent,
-                                                  width: 3,
+                                      // Group slots by room if booking entire lab
+                                      if (_bookEntireLab) ...[
+                                        ..._selectedRooms.map((room) {
+                                          // Get all slots for this room
+                                          final roomSlots = _availableSlots.where((s) => s.roomId == room.id).toList();
+                                          
+                                          if (roomSlots.isEmpty) return const SizedBox.shrink();
+                                          
+                                          return Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              // Room header
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.blue[50],
+                                                  border: Border(
+                                                    bottom: BorderSide(color: Colors.blue[200]!),
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.room, size: 16, color: Colors.blue[700]),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      room.name,
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: Colors.blue[900],
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                Checkbox(
-                                                  value: isSelected,
-                                                  onChanged: isBooked
-                                                      ? null
-                                                      : (value) => _toggleSlotSelection(slot.id),
-                                                ),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Text(
-                                                        '${slot.dayName}',
-                                                        style: TextStyle(
-                                                          fontWeight: FontWeight.w600,
-                                                          color: isBooked ? Colors.grey : null,
+                                              // Slots for this room
+                                              ...roomSlots.map((slot) {
+                                                final isBooked = _isSlotBooked(slot);
+                                                // Check if this specific slot is selected
+                                                final isSelected = _selectedSlotIds.contains(slot.id);
+                                                final canSelect = _canSelectSlot(slot);
+                                                final timeFormat = DateFormat('HH:mm');
+                                        
+                                                return InkWell(
+                                                  onTap: (!canSelect || isBooked) ? null : () => _toggleSlotSelection(slot.id),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                                    decoration: BoxDecoration(
+                                                      color: isSelected
+                                                          ? Colors.blue[50]
+                                                          : isBooked
+                                                              ? Colors.red[50]
+                                                              : Colors.white,
+                                                      border: Border(
+                                                        bottom: BorderSide(color: Colors.grey[200]!),
+                                                        left: BorderSide(
+                                                          color: isSelected
+                                                              ? Colors.blue
+                                                              : Colors.transparent,
+                                                          width: 3,
                                                         ),
                                                       ),
-                                                      const SizedBox(height: 4),
-                                                      Row(
-                                                        children: [
-                                                          Icon(
-                                                            Icons.access_time,
-                                                            size: 14,
-                                                            color: isBooked
-                                                                ? Colors.red[400]
-                                                                : Colors.grey[600],
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        Checkbox(
+                                                          value: isSelected,
+                                                          onChanged: (!canSelect || isBooked)
+                                                              ? null
+                                                              : (value) => _toggleSlotSelection(slot.id),
+                                                        ),
+                                                        Expanded(
+                                                          child: Column(
+                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                            children: [
+                                                              Text(
+                                                                '${slot.dayName}',
+                                                                style: TextStyle(
+                                                                  fontWeight: FontWeight.w600,
+                                                                  color: isBooked ? Colors.grey : null,
+                                                                ),
+                                                              ),
+                                                              const SizedBox(height: 4),
+                                                              Row(
+                                                                children: [
+                                                                  Icon(
+                                                                    Icons.access_time,
+                                                                    size: 14,
+                                                                    color: isBooked
+                                                                        ? Colors.red[400]
+                                                                        : Colors.grey[600],
+                                                                  ),
+                                                                  const SizedBox(width: 4),
+                                                                  Text(
+                                                                    '${timeFormat.format(slot.startTime)} - ${timeFormat.format(slot.endTime)}',
+                                                                    style: TextStyle(
+                                                                      fontSize: 13,
+                                                                      color: isBooked
+                                                                          ? Colors.red[700]
+                                                                          : Colors.grey[700],
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ],
                                                           ),
-                                                          const SizedBox(width: 4),
-                                                          Text(
-                                                            '${timeFormat.format(slot.startTime)} - ${timeFormat.format(slot.endTime)}',
-                                                            style: TextStyle(
-                                                              fontSize: 13,
-                                                              color: isBooked
-                                                                  ? Colors.red[700]
-                                                                  : Colors.grey[700],
+                                                        ),
+                                                        if (isBooked)
+                                                          Container(
+                                                            padding: const EdgeInsets.symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 4,
+                                                            ),
+                                                            decoration: BoxDecoration(
+                                                              color: Colors.red[100],
+                                                              borderRadius: BorderRadius.circular(4),
+                                                            ),
+                                                            child: Text(
+                                                              'Booked',
+                                                              style: TextStyle(
+                                                                fontSize: 11,
+                                                                color: Colors.red[900],
+                                                                fontWeight: FontWeight.w600,
+                                                              ),
                                                             ),
                                                           ),
-                                                        ],
-                                                      ),
-                                                    ],
+                                                      ],
+                                                    ),
+                                                  ),
+                                                );
+                                              }).toList(),
+                                            ],
+                                          );
+                                        }).toList(),
+                                      ] else ...[
+                                        // Single room booking mode - show slots normally
+                                        ..._availableSlots.map((slot) {
+                                          final isBooked = _isSlotBooked(slot);
+                                          final isSelected = _selectedSlotIds.contains(slot.id);
+                                          final timeFormat = DateFormat('HH:mm');
+                                          
+                                          return InkWell(
+                                            onTap: isBooked ? null : () => _toggleSlotSelection(slot.id),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                              decoration: BoxDecoration(
+                                                color: isSelected
+                                                    ? Colors.blue[50]
+                                                    : isBooked
+                                                        ? Colors.red[50]
+                                                        : Colors.white,
+                                                border: Border(
+                                                  bottom: BorderSide(color: Colors.grey[200]!),
+                                                  left: BorderSide(
+                                                    color: isSelected
+                                                        ? Colors.blue
+                                                        : Colors.transparent,
+                                                    width: 3,
                                                   ),
                                                 ),
-                                                if (isBooked)
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 4,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.red[100],
-                                                      borderRadius: BorderRadius.circular(4),
-                                                    ),
-                                                    child: Text(
-                                                      'Booked',
-                                                      style: TextStyle(
-                                                        fontSize: 11,
-                                                        color: Colors.red[900],
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Checkbox(
+                                                    value: isSelected,
+                                                    onChanged: isBooked
+                                                        ? null
+                                                        : (value) => _toggleSlotSelection(slot.id),
+                                                  ),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text(
+                                                          '${slot.dayName}',
+                                                          style: TextStyle(
+                                                            fontWeight: FontWeight.w600,
+                                                            color: isBooked ? Colors.grey : null,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(height: 4),
+                                                        Row(
+                                                          children: [
+                                                            Icon(
+                                                              Icons.access_time,
+                                                              size: 14,
+                                                              color: isBooked
+                                                                  ? Colors.red[400]
+                                                                  : Colors.grey[600],
+                                                            ),
+                                                            const SizedBox(width: 4),
+                                                            Text(
+                                                              '${timeFormat.format(slot.startTime)} - ${timeFormat.format(slot.endTime)}',
+                                                              style: TextStyle(
+                                                                fontSize: 13,
+                                                                color: isBooked
+                                                                    ? Colors.red[700]
+                                                                    : Colors.grey[700],
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ],
                                                     ),
                                                   ),
-                                              ],
+                                                  if (isBooked)
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.red[100],
+                                                        borderRadius: BorderRadius.circular(4),
+                                                      ),
+                                                      child: Text(
+                                                        'Booked',
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: Colors.red[900],
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
                                             ),
-                                          ),
-                                        );
-                                      }).toList(),
+                                          );
+                                        }).toList(),
+                                      ],
                                     ],
                                   ),
                                 ),

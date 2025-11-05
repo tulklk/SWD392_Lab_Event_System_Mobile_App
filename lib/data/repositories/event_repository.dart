@@ -433,4 +433,39 @@ class EventRepository {
       });
     }
   }
+
+  // Get all rooms for an event (when event is booked for entire lab)
+  Future<Result<List<String>>> getEventRoomIds(String eventId) async {
+    try {
+      debugPrint('🔍 Getting all room IDs for event: $eventId');
+      
+      // Query all room_slots that have this event
+      final slotsResponse = await _supabase
+          .from('tbl_room_slots')
+          .select('RoomId')
+          .eq('EventId', eventId);
+
+      debugPrint('   Room slots response: $slotsResponse');
+      
+      if (slotsResponse != null && (slotsResponse as List).isNotEmpty) {
+        // Get unique room IDs
+        final roomIds = (slotsResponse as List)
+            .map((slot) => slot['RoomId']?.toString())
+            .where((id) => id != null && id.isNotEmpty)
+            .toSet()
+            .toList()
+            .cast<String>();
+        
+        debugPrint('   ✅ Found ${roomIds.length} unique room IDs: $roomIds');
+        return Success(roomIds);
+      } else {
+        debugPrint('   ⚠️ No room slots found for event: $eventId');
+        return Success([]);
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error getting event room IDs: $e');
+      debugPrint('   Stack trace: $stackTrace');
+      return Success([]);
+    }
+  }
 }
