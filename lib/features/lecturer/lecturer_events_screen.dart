@@ -20,14 +20,73 @@ class LecturerEventsScreen extends ConsumerStatefulWidget {
   ConsumerState<LecturerEventsScreen> createState() => _LecturerEventsScreenState();
 }
 
-class _LecturerEventsScreenState extends ConsumerState<LecturerEventsScreen> {
+class _LecturerEventsScreenState extends ConsumerState<LecturerEventsScreen> 
+    with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
   bool _isLoading = false;
   List<Event> _events = [];
+  DateTime? _lastRefreshTime;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadEvents();
+  }
+
+  @override
+  void didUpdateWidget(LecturerEventsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // When widget key changes (triggered by refresh), reload events
+    if (widget.key != oldWidget.key) {
+      debugPrint('🔄 Events: Widget key changed, refreshing...');
+      _refreshData();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      debugPrint('📱 Events: App resumed, refreshing...');
+      _refreshData();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh when returning to this screen (e.g., from create event)
+    final now = DateTime.now();
+    if (_lastRefreshTime == null || 
+        now.difference(_lastRefreshTime!).inSeconds > 2) {
+      debugPrint('🔄 Events: Dependencies changed, refreshing...');
+      _refreshData();
+    }
+  }
+
+  Future<void> _refreshData() async {
+    if (_isLoading) {
+      debugPrint('⏭️ Events: Already loading, skipping...');
+      return;
+    }
+    
+    debugPrint('🔄 Events: Refreshing data...');
+    _lastRefreshTime = DateTime.now();
+    await _loadEvents();
+  }
+
+  // Public method to refresh events from outside (e.g., from dashboard)
+  void refreshEvents() {
+    debugPrint('🔄 Events: External refresh requested');
+    _refreshData();
   }
 
   Future<void> _deleteEvent(Event event) async {
@@ -90,25 +149,41 @@ class _LecturerEventsScreenState extends ConsumerState<LecturerEventsScreen> {
   }
 
   Future<void> _loadEvents() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    final currentUser = ref.read(currentUserProvider);
-    if (currentUser == null) {
-      setState(() {
-        _isLoading = false;
-      });
+    if (_isLoading) {
+      debugPrint('⏭️ Already loading events, skipping...');
       return;
     }
 
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+
+    final currentUser = ref.read(currentUserProvider);
+    if (currentUser == null) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+
+    debugPrint('🔄 Loading events for lecturer: ${currentUser.id}');
     final eventRepository = ref.read(eventRepositoryProvider);
     // Only load events created by current lecturer
     final result = await eventRepository.getEventsByCreator(currentUser.id);
 
+    if (!mounted) return;
+
     if (result.isSuccess) {
+      debugPrint('✅ Loaded ${result.data?.length ?? 0} events');
+      // Sort events by createdAt descending (newest first)
+      final sortedEvents = result.data ?? [];
+      sortedEvents.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       setState(() {
-        _events = result.data ?? [];
+        _events = sortedEvents;
         _isLoading = false;
       });
     } else {
@@ -128,6 +203,7 @@ class _LecturerEventsScreenState extends ConsumerState<LecturerEventsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -186,8 +262,20 @@ class _LecturerEventsScreenState extends ConsumerState<LecturerEventsScreen> {
                     ),
             ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          context.push('/lecturer/events/create');
+        onPressed: () async {
+          // Navigate to create event and wait for result
+          final result = await context.push('/lecturer/events/create');
+          // Always refresh when returning from create screen (user might have created event)
+          if (mounted) {
+            debugPrint('🔄 Returning from create screen, refreshing events list...');
+            // Reset last refresh time to force refresh
+            _lastRefreshTime = null;
+            // Wait a bit for navigation to complete
+            await Future.delayed(const Duration(milliseconds: 300));
+            if (mounted) {
+              await _loadEvents();
+            }
+          }
         },
         backgroundColor: const Color(0xFFFF6600),
         icon: const Icon(Icons.add, color: Colors.white),

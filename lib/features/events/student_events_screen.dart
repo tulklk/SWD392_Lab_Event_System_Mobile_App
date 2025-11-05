@@ -13,6 +13,7 @@ import '../../data/repositories/room_repository.dart';
 import '../../data/repositories/lab_repository.dart';
 import '../../data/repositories/booking_repository.dart';
 import '../auth/auth_controller.dart';
+import '../bookings/booking_providers.dart';
 
 class StudentEventsScreen extends ConsumerStatefulWidget {
   const StudentEventsScreen({super.key});
@@ -88,8 +89,10 @@ class _StudentEventsScreenState extends ConsumerState<StudentEventsScreen>
     final result = await eventRepository.getPublicEvents();
 
     if (result.isSuccess && mounted) {
+      // Sort events by createdAt descending (newest first)
+      final sortedEvents = result.data!..sort((a, b) => b.createdAt.compareTo(a.createdAt));
       setState(() {
-        _allEvents = result.data!;
+        _allEvents = sortedEvents;
         _filteredEvents = _allEvents;
         _isLoading = false;
       });
@@ -120,7 +123,8 @@ class _StudentEventsScreenState extends ConsumerState<StudentEventsScreen>
 
         // Only show active events
         return event.isActive;
-      }).toList();
+      }).toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt)); // Sort by createdAt descending (newest first)
     });
   }
 
@@ -590,16 +594,21 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
       if (mounted) {
         if (result.isSuccess) {
           setState(() => _isRegistered = true);
+          
+          // Trigger refresh of My Bookings screen by incrementing the provider
+          ref.read(myBookingsRefreshProvider.notifier).refresh();
+          // Signal navigation to My Bookings tab (index 3 for students)
+          ref.read(navigateToMyBookingsProvider.notifier).navigate();
+          debugPrint('✅ Event booking created successfully. My Bookings refresh signal sent.');
+          
+          // Show success message
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Successfully registered for event!'),
+              content: Text('Successfully registered for event! Navigating to My Bookings...'),
               backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
             ),
           );
-          
-          // Trigger refresh of My Bookings screen if it exists
-          // This will be handled by the AutomaticKeepAliveClientMixin's didChangeDependencies
-          debugPrint('✅ Event booking created successfully. My Bookings should refresh automatically.');
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
