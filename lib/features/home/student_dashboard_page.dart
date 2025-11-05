@@ -27,6 +27,7 @@ class StudentDashboardPage extends ConsumerStatefulWidget {
 class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
     with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
   List<Event> _upcomingEvents = [];
+  List<Event> _allEvents = [];
   bool _isLoadingEvents = true;
   DateTime? _lastRefreshTime;
 
@@ -38,6 +39,7 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadUpcomingEvents();
+    _loadAllEvents(); // Load all events for stats
   }
 
   @override
@@ -78,6 +80,7 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
     debugPrint('🔄 Home: Refreshing data...');
     _lastRefreshTime = DateTime.now();
     await _loadUpcomingEvents();
+    await _loadAllEvents();
   }
 
   Future<void> _loadUpcomingEvents() async {
@@ -91,6 +94,29 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
         _upcomingEvents = result.isSuccess ? result.data! : [];
         _isLoadingEvents = false;
       });
+    }
+  }
+
+  Future<void> _loadAllEvents() async {
+    final eventRepository = EventRepository();
+    final result = await eventRepository.getPublicEvents();
+    
+    debugPrint('📊 Loading all events for stats...');
+    debugPrint('   Result success: ${result.isSuccess}');
+    debugPrint('   Events count: ${result.data?.length ?? 0}');
+    
+    if (mounted && result.isSuccess) {
+      setState(() {
+        _allEvents = result.data!;
+      });
+      debugPrint('   ✅ Loaded ${_allEvents.length} events');
+      debugPrint('   Active: ${_allEvents.where((e) => e.isActive).length}');
+      debugPrint('   Upcoming: ${_allEvents.where((e) {
+        if (e.startDate == null) return false;
+        return e.startDate!.isAfter(DateTime.now());
+      }).length}');
+    } else if (mounted) {
+      debugPrint('   ❌ Failed to load events: ${result.error}');
     }
   }
 
@@ -220,20 +246,6 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
                 Expanded(
                   child: _buildQuickActionCard(
                     context,
-                    icon: Icons.calendar_month,
-                    iconColor: const Color(0xFFFF6600),
-                    iconBackgroundColor: const Color(0xFFFF6600).withOpacity(0.1),
-                    title: 'Book Lab',
-                    onTap: () {
-                      // Navigate to booking form
-                      context.push('/bookings/new');
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildQuickActionCard(
-                    context,
                     icon: Icons.event,
                     iconColor: const Color(0xFF1A73E8),
                     iconBackgroundColor: const Color(0xFF1A73E8).withOpacity(0.1),
@@ -244,11 +256,7 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
                     },
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(width: 12),
-            Row(
-              children: [
+                const SizedBox(width: 12),
                 Expanded(
                   child: _buildQuickActionCard(
                     context,
@@ -262,9 +270,73 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
                     },
                   ),
                 ),
-                const SizedBox(width: 12),
-                const Expanded(child: SizedBox()), // Empty space
               ],
+            ),
+            const SizedBox(height: 24),
+
+            // Event Status
+            const Text(
+              'Event Status',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Event Stats
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildStatItem(
+                      _allEvents.length.toString(),
+                      'Total',
+                      const Color(0xFF1A73E8),
+                    ),
+                  ),
+                  Container(
+                    width: 1,
+                    height: 40,
+                    color: const Color(0xFFE2E8F0),
+                  ),
+                  Expanded(
+                    child: _buildStatItem(
+                      _allEvents.where((e) => e.isActive).length.toString(),
+                      'Active',
+                      const Color(0xFF10B981),
+                    ),
+                  ),
+                  Container(
+                    width: 1,
+                    height: 40,
+                    color: const Color(0xFFE2E8F0),
+                  ),
+                  Expanded(
+                    child: _buildStatItem(
+                      _allEvents.where((e) {
+                        if (e.startDate == null) return false;
+                        return e.startDate!.isAfter(DateTime.now());
+                      }).length.toString(),
+                      'Upcoming',
+                      const Color(0xFFFF6600),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -335,48 +407,6 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
                 child: _StudentEventCard(event: event),
               )).toList(),
             const SizedBox(height: 24),
-
-            // Lab Status
-            const Text(
-              'Lab Status',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E293B),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatusCard(
-                    context,
-                    count: '5',
-                    label: 'Available',
-                    color: const Color(0xFF10B981),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildStatusCard(
-                    context,
-                    count: '3',
-                    label: 'In Use',
-                    color: const Color(0xFFF59E0B),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildStatusCard(
-                    context,
-                    count: '1',
-                    label: 'Maintenance',
-                    color: const Color(0xFFEF4444),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -437,46 +467,28 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
   }
 
 
-  Widget _buildStatusCard(
-    BuildContext context, {
-    required String count,
-    required String label,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+
+  Widget _buildStatItem(String count, String label, Color color) {
+    return Column(
+      children: [
+        Text(
+          count,
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: color,
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Text(
-            count,
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Color(0xFF64748B),
+            fontWeight: FontWeight.w500,
           ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF64748B),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

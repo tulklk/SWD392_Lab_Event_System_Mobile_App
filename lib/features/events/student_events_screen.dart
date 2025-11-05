@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/models/event.dart';
 import '../../domain/models/room.dart';
 import '../../domain/models/lab.dart';
@@ -151,12 +152,6 @@ class _StudentEventsScreenState extends ConsumerState<StudentEventsScreen>
       );
     }
 
-    final activeEvents = _allEvents.where((e) => e.isActive).length;
-    final upcomingEvents = _allEvents.where((e) {
-      if (e.startDate == null) return false;
-      return e.startDate!.isAfter(DateTime.now());
-    }).length;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -212,60 +207,6 @@ class _StudentEventsScreenState extends ConsumerState<StudentEventsScreen>
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(vertical: 16),
               ),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          // Event Stats
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildStatItem(
-                    _allEvents.length.toString(),
-                    'Total',
-                    const Color(0xFF1A73E8),
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 40,
-                  color: const Color(0xFFE2E8F0),
-                ),
-                Expanded(
-                  child: _buildStatItem(
-                    activeEvents.toString(),
-                    'Active',
-                    const Color(0xFF10B981),
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 40,
-                  color: const Color(0xFFE2E8F0),
-                ),
-                Expanded(
-                  child: _buildStatItem(
-                    upcomingEvents.toString(),
-                    'Upcoming',
-                    const Color(0xFFFF6600),
-                  ),
-                ),
-              ],
             ),
           ),
 
@@ -332,29 +273,6 @@ class _StudentEventsScreenState extends ConsumerState<StudentEventsScreen>
     );
   }
 
-  Widget _buildStatItem(String count, String label, Color color) {
-    return Column(
-      children: [
-        Text(
-          count,
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Color(0xFF64748B),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 // Event Card Widget for Student
@@ -370,7 +288,7 @@ class _StudentEventCard extends ConsumerStatefulWidget {
 }
 
 class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
-  Room? _room;
+  List<Room> _rooms = [];
   Lab? _lab;
   bool _isLoadingRoomLab = false;
   bool _isRegistered = false;
@@ -391,40 +309,79 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
       final roomRepository = RoomRepository();
       final labRepository = LabRepository();
 
-      final infoResult = await eventRepository.getEventRoomAndLabInfo(widget.event.id);
+      // Get all room IDs for event (for entire lab booking)
+      final roomIdsResult = await eventRepository.getEventRoomIds(widget.event.id);
 
-      if (infoResult.isSuccess && infoResult.data != null) {
-        final roomId = infoResult.data!['roomId'];
-        final labId = infoResult.data!['labId'];
+      List<Room> loadedRooms = [];
+      String? labId;
 
-        if (roomId != null && roomId.isNotEmpty) {
+      if (roomIdsResult.isSuccess && roomIdsResult.data != null && roomIdsResult.data!.isNotEmpty) {
+        // Load all rooms
+        for (final roomId in roomIdsResult.data!) {
           final roomResult = await roomRepository.getRoomById(roomId);
-          if (roomResult.isSuccess && roomResult.data != null && mounted) {
-            setState(() => _room = roomResult.data);
-          }
-        }
+          if (roomResult.isSuccess && roomResult.data != null) {
+            loadedRooms.add(roomResult.data!);
 
-        if (labId != null && labId.isNotEmpty) {
-          final labResult = await labRepository.getLabById(labId);
-          if (labResult.isSuccess && labResult.data != null && mounted) {
-            setState(() => _lab = labResult.data);
-          } else {
-            final labsResult = await labRepository.getLabsFromSupabase();
-            if (labsResult.isSuccess && labsResult.data != null && mounted) {
+            // Get labId from first room
+            if (labId == null) {
               try {
-                final lab = labsResult.data!.firstWhere(
-                  (l) => l.id == labId,
-                );
-                setState(() => _lab = lab);
+                final supabase = Supabase.instance.client;
+                final roomResponse = await supabase
+                    .from('tbl_rooms')
+                    .select('LabId')
+                    .eq('Id', roomId)
+                    .maybeSingle();
+                if (roomResponse != null && roomResponse['LabId'] != null) {
+                  labId = roomResponse['LabId']?.toString();
+                }
               } catch (e) {
-                debugPrint('Lab with id $labId not found');
+                debugPrint('Could not get LabId from room: $e');
               }
             }
           }
         }
+      } else {
+        // Fallback: try to get single roomId and labId (for single room booking)
+        final infoResult = await eventRepository.getEventRoomAndLabInfo(widget.event.id);
+
+        if (infoResult.isSuccess && infoResult.data != null) {
+          final roomId = infoResult.data!['roomId'];
+          labId = infoResult.data!['labId'];
+
+          if (roomId != null && roomId.isNotEmpty) {
+            final roomResult = await roomRepository.getRoomById(roomId);
+            if (roomResult.isSuccess && roomResult.data != null) {
+              loadedRooms.add(roomResult.data!);
+            }
+          }
+        }
+      }
+
+      // Load Lab
+      if (labId != null && labId.isNotEmpty) {
+        final labResult = await labRepository.getLabById(labId);
+        if (labResult.isSuccess && labResult.data != null && mounted) {
+          setState(() => _lab = labResult.data);
+        } else {
+          final labsResult = await labRepository.getLabsFromSupabase();
+          if (labsResult.isSuccess && labsResult.data != null && mounted) {
+            try {
+              final lab = labsResult.data!.firstWhere(
+                (l) => l.id == labId,
+              );
+              setState(() => _lab = lab);
+            } catch (e) {
+              debugPrint('Lab with id $labId not found');
+            }
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() => _rooms = loadedRooms);
       }
     } catch (e) {
-      debugPrint('Error loading room/lab: $e');
+      debugPrint('Error loading rooms/lab: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoadingRoomLab = false);
@@ -483,8 +440,8 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
       return;
     }
 
-    // Get room ID from event
-    if (_room == null) {
+    // Get room ID(s) from event
+    if (_rooms.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Room information not available. Please try again.'),
@@ -492,6 +449,72 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
         ),
       );
       return;
+    }
+
+    // If multiple rooms, let user choose
+    Room? selectedRoom = _rooms.first;
+    if (_rooms.length > 1) {
+      final roomResult = await showDialog<Room>(
+        context: context,
+        builder: (context) {
+          Room? tempSelectedRoom = _rooms.first;
+          
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(Icons.room, color: Colors.blue[700]),
+                    const SizedBox(width: 8),
+                    const Text('Select Room'),
+                  ],
+                ),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: _rooms.map((room) {
+                      return RadioListTile<Room>(
+                        title: Text(
+                          room.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text('Capacity: ${room.capacity} seats'),
+                        value: room,
+                        groupValue: tempSelectedRoom,
+                        activeColor: const Color(0xFFFF6600),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() {
+                              tempSelectedRoom = value;
+                            });
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, tempSelectedRoom),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF6600),
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Select'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      if (roomResult == null) return; // User cancelled
+      selectedRoom = roomResult;
     }
 
     // Check capacity
@@ -557,7 +580,7 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
       final bookingRepository = BookingRepository();
       final result = await bookingRepository.createEventBooking(
         eventId: widget.event.id,
-        roomId: _room!.id,
+        roomId: selectedRoom!.id,
         userId: currentUser.id,
         startTime: widget.event.startDate!,
         endTime: widget.event.endDate!,
@@ -685,12 +708,12 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
                       Text(_lab!.name),
                       const SizedBox(height: 12),
                     ],
-                    if (_room != null) ...[
-                      const Text(
-                        'Room:',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                    if (_rooms.isNotEmpty) ...[
+                      Text(
+                        'Room${_rooms.length > 1 ? 's' : ''}:',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      Text(_room!.name),
+                      Text(_rooms.map((r) => r.name).join(', ')),
                       const SizedBox(height: 12),
                     ],
                     if (widget.event.capacity != null) ...[
@@ -850,9 +873,12 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
                 ],
               ),
               // Lab and Room info
-              if (_lab != null || _room != null) ...[
+              if (_lab != null || _rooms.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     if (_lab != null) ...[
                       Icon(Icons.science, size: 16, color: Colors.orange[700]),
@@ -865,24 +891,15 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      if (_room != null) ...[
-                        const SizedBox(width: 12),
-                        Icon(Icons.room, size: 16, color: Colors.blue[700]),
-                        const SizedBox(width: 4),
-                        Text(
-                          _room!.name,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.blue[700],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ] else if (_room != null) ...[
+                    ],
+                    if (_rooms.isNotEmpty) ...[
+                      if (_lab != null) const SizedBox(width: 8),
                       Icon(Icons.room, size: 16, color: Colors.blue[700]),
                       const SizedBox(width: 4),
                       Text(
-                        _room!.name,
+                        _rooms.length == 1
+                            ? _rooms.first.name
+                            : '${_rooms.length} rooms: ${_rooms.map((r) => r.name).join(', ')}',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.blue[700],

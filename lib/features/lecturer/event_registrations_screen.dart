@@ -1,19 +1,68 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../../data/repositories/event_registration_repository.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../data/repositories/event_repository.dart';
+import '../../data/repositories/room_repository.dart';
 import '../../domain/models/event_registration.dart';
 import '../../domain/models/user.dart';
 import '../../domain/models/event.dart';
+import '../../domain/models/booking.dart';
+import '../../domain/models/room.dart';
 
 final eventRegistrationsProvider = FutureProvider.family<List<EventRegistration>, String>(
   (ref, eventId) async {
     final repo = ref.watch(eventRegistrationRepositoryProvider);
     final result = await repo.getRegistrationsForEvent(eventId);
     return result.data ?? [];
+  },
+);
+
+// Provider to get bookings with roomId for an event
+final eventBookingsProvider = FutureProvider.family<List<Booking>, String>(
+  (ref, eventId) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final response = await supabase
+          .from('tbl_bookings')
+          .select()
+          .eq('EventId', eventId)
+          .order('CreatedAt', ascending: false);
+
+      if (response == null || response.isEmpty) {
+        return [];
+      }
+
+      final bookings = (response as List)
+          .map((json) => Booking.fromJson(json as Map<String, dynamic>))
+          .toList();
+
+      return bookings;
+    } catch (e) {
+      debugPrint('Error getting bookings: $e');
+      return [];
+    }
+  },
+);
+
+// Provider to get room IDs from event (from room slots)
+final eventRoomIdsProvider = FutureProvider.family<List<String>, String>(
+  (ref, eventId) async {
+    try {
+      final eventRepository = ref.watch(eventRepositoryProvider);
+      final result = await eventRepository.getEventRoomIds(eventId);
+      if (result.isSuccess && result.data != null) {
+        return result.data!;
+      }
+      return [];
+    } catch (e) {
+      debugPrint('Error getting event room IDs: $e');
+      return [];
+    }
   },
 );
 
@@ -162,68 +211,90 @@ class _EventRegistrationsScreenState extends ConsumerState<EventRegistrationsScr
                 final approvedCount = registrations.where((r) => r.isApproved).length;
                 final rejectedCount = registrations.where((r) => r.isRejected).length;
 
-                return Column(
-                  children: [
-                    // Stats Row
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          _StatChip(
-                            label: 'Pending',
-                            count: pendingCount,
-                            color: Colors.orange,
-                          ),
-                          const SizedBox(width: 8),
-                          _StatChip(
-                            label: 'Approved',
-                            count: approvedCount,
-                            color: Colors.green,
-                          ),
-                          const SizedBox(width: 8),
-                          _StatChip(
-                            label: 'Rejected',
-                            count: rejectedCount,
-                            color: Colors.red,
-                          ),
-                        ],
-                      ),
-                    ),
+                // Check if event has multiple rooms from event slots
+                final eventRoomIdsAsync = ref.watch(eventRoomIdsProvider(widget.eventId));
+                final bookingsAsync = ref.watch(eventBookingsProvider(widget.eventId));
+                
+                return eventRoomIdsAsync.when(
+                  data: (eventRoomIds) {
+                    // Check if event has multiple rooms
+                    final hasMultipleRooms = eventRoomIds.length > 1;
+                    
+                    debugPrint('🔍 Event has ${eventRoomIds.length} rooms: $eventRoomIds');
+                    debugPrint('   Has multiple rooms: $hasMultipleRooms');
 
-                    // List
-                    Expanded(
-                      child: RefreshIndicator(
-                        onRefresh: () async {
-                          ref.invalidate(eventRegistrationsProvider(widget.eventId));
+                    if (hasMultipleRooms) {
+                      // Group by room - use event room IDs
+                      return bookingsAsync.when(
+                        data: (bookings) {
+                          return _buildGroupedByRoom(
+                            registrations: registrations,
+                            bookings: bookings,
+                            roomIds: eventRoomIds, // Use event room IDs, not booking room IDs
+                            pendingCount: pendingCount,
+                            approvedCount: approvedCount,
+                            rejectedCount: rejectedCount,
+                            ref: ref,
+                          );
                         },
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: registrations.length,
-                          itemBuilder: (context, index) {
-                            final registration = registrations[index];
-                            final isSelected = _selectedIds.contains(registration.id);
-
-                            return _RegistrationCard(
-                              registration: registration,
-                              isSelectionMode: _isSelectionMode,
-                              isSelected: isSelected,
-                              onSelectionChanged: (selected) {
-                                setState(() {
-                                  if (selected) {
-                                    _selectedIds.add(registration.id);
-                                  } else {
-                                    _selectedIds.remove(registration.id);
-                                  }
-                                });
-                              },
-                              onApprove: () => _handleApprove(registration.id),
-                              onReject: () => _handleReject(registration.id),
-                            );
-                          },
+                        loading: () => const Center(child: CircularProgressIndicator()),
+                        error: (_, __) => _buildGroupedByRoom(
+                          registrations: registrations,
+                          bookings: [],
+                          roomIds: eventRoomIds,
+                          pendingCount: pendingCount,
+                          approvedCount: approvedCount,
+                          rejectedCount: rejectedCount,
+                          ref: ref,
                         ),
-                      ),
+                      );
+                    } else {
+                      // Single room - show flat list
+                      return _buildFlatList(
+                        registrations: registrations,
+                        pendingCount: pendingCount,
+                        approvedCount: approvedCount,
+                        rejectedCount: rejectedCount,
+                        ref: ref,
+                      );
+                    }
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (_, __) => bookingsAsync.when(
+                    data: (bookings) {
+                      // Fallback: check from bookings
+                      final roomIds = bookings.map((b) => b.roomId).toSet().toList();
+                      final hasMultipleRooms = roomIds.length > 1;
+                      
+                      if (hasMultipleRooms) {
+                        return _buildGroupedByRoom(
+                          registrations: registrations,
+                          bookings: bookings,
+                          roomIds: roomIds,
+                          pendingCount: pendingCount,
+                          approvedCount: approvedCount,
+                          rejectedCount: rejectedCount,
+                          ref: ref,
+                        );
+                      } else {
+                        return _buildFlatList(
+                          registrations: registrations,
+                          pendingCount: pendingCount,
+                          approvedCount: approvedCount,
+                          rejectedCount: rejectedCount,
+                          ref: ref,
+                        );
+                      }
+                    },
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (_, __) => _buildFlatList(
+                      registrations: registrations,
+                      pendingCount: pendingCount,
+                      approvedCount: approvedCount,
+                      rejectedCount: rejectedCount,
+                      ref: ref,
                     ),
-                  ],
+                  ),
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -365,6 +436,177 @@ class _EventRegistrationsScreenState extends ConsumerState<EventRegistrationsScr
         }
       }
     }
+  }
+
+  Widget _buildFlatList({
+    required List<EventRegistration> registrations,
+    required int pendingCount,
+    required int approvedCount,
+    required int rejectedCount,
+    required WidgetRef ref,
+  }) {
+    return Column(
+      children: [
+        // Stats Row
+        Container(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              _StatChip(
+                label: 'Pending',
+                count: pendingCount,
+                color: Colors.orange,
+              ),
+              const SizedBox(width: 8),
+              _StatChip(
+                label: 'Approved',
+                count: approvedCount,
+                color: Colors.green,
+              ),
+              const SizedBox(width: 8),
+              _StatChip(
+                label: 'Rejected',
+                count: rejectedCount,
+                color: Colors.red,
+              ),
+            ],
+          ),
+        ),
+
+        // List
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(eventRegistrationsProvider(widget.eventId));
+              ref.invalidate(eventBookingsProvider(widget.eventId));
+              ref.invalidate(eventRoomIdsProvider(widget.eventId));
+            },
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: registrations.length,
+              itemBuilder: (context, index) {
+                final registration = registrations[index];
+                final isSelected = _selectedIds.contains(registration.id);
+
+                return _RegistrationCard(
+                  registration: registration,
+                  isSelectionMode: _isSelectionMode,
+                  isSelected: isSelected,
+                  onSelectionChanged: (selected) {
+                    setState(() {
+                      if (selected) {
+                        _selectedIds.add(registration.id);
+                      } else {
+                        _selectedIds.remove(registration.id);
+                      }
+                    });
+                  },
+                  onApprove: () => _handleApprove(registration.id),
+                  onReject: () => _handleReject(registration.id),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGroupedByRoom({
+    required List<EventRegistration> registrations,
+    required List<Booking> bookings,
+    required List<String> roomIds,
+    required int pendingCount,
+    required int approvedCount,
+    required int rejectedCount,
+    required WidgetRef ref,
+  }) {
+    // Create a map of registrationId -> booking (to get roomId)
+    final registrationIdToBooking = <String, Booking>{};
+    for (final booking in bookings) {
+      registrationIdToBooking[booking.id] = booking;
+    }
+
+    // Group registrations by roomId
+    final registrationsByRoom = <String, List<EventRegistration>>{};
+    for (final registration in registrations) {
+      final booking = registrationIdToBooking[registration.id];
+      if (booking != null) {
+        final roomId = booking.roomId;
+        if (!registrationsByRoom.containsKey(roomId)) {
+          registrationsByRoom[roomId] = [];
+        }
+        registrationsByRoom[roomId]!.add(registration);
+      }
+    }
+
+    return Column(
+      children: [
+        // Stats Row
+        Container(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              _StatChip(
+                label: 'Pending',
+                count: pendingCount,
+                color: Colors.orange,
+              ),
+              const SizedBox(width: 8),
+              _StatChip(
+                label: 'Approved',
+                count: approvedCount,
+                color: Colors.green,
+              ),
+              const SizedBox(width: 8),
+              _StatChip(
+                label: 'Rejected',
+                count: rejectedCount,
+                color: Colors.red,
+              ),
+            ],
+          ),
+        ),
+
+        // Grouped List by Room
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(eventRegistrationsProvider(widget.eventId));
+              ref.invalidate(eventBookingsProvider(widget.eventId));
+              ref.invalidate(eventRoomIdsProvider(widget.eventId));
+            },
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: roomIds.length,
+              itemBuilder: (context, roomIndex) {
+                final roomId = roomIds[roomIndex];
+                final roomRegistrations = registrationsByRoom[roomId] ?? [];
+
+                return _RoomGroupSection(
+                  roomId: roomId,
+                  registrations: roomRegistrations,
+                  bookings: bookings,
+                  isSelectionMode: _isSelectionMode,
+                  selectedIds: _selectedIds,
+                  onSelectionChanged: (registrationId, selected) {
+                    setState(() {
+                      if (selected) {
+                        _selectedIds.add(registrationId);
+                      } else {
+                        _selectedIds.remove(registrationId);
+                      }
+                    });
+                  },
+                  onApprove: (id) => _handleApprove(id),
+                  onReject: (id) => _handleReject(id),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -728,6 +970,132 @@ class _StatusBadge extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// Room Group Section Widget
+class _RoomGroupSection extends ConsumerStatefulWidget {
+  final String roomId;
+  final List<EventRegistration> registrations;
+  final List<Booking> bookings;
+  final bool isSelectionMode;
+  final Set<String> selectedIds;
+  final Function(String, bool) onSelectionChanged;
+  final Function(String) onApprove;
+  final Function(String) onReject;
+
+  const _RoomGroupSection({
+    required this.roomId,
+    required this.registrations,
+    required this.bookings,
+    required this.isSelectionMode,
+    required this.selectedIds,
+    required this.onSelectionChanged,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  @override
+  ConsumerState<_RoomGroupSection> createState() => _RoomGroupSectionState();
+}
+
+class _RoomGroupSectionState extends ConsumerState<_RoomGroupSection> {
+  Room? _room;
+  bool _isLoadingRoom = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRoom();
+  }
+
+  Future<void> _loadRoom() async {
+    try {
+      final roomRepository = RoomRepository();
+      final result = await roomRepository.getRoomById(widget.roomId);
+      if (result.isSuccess && result.data != null && mounted) {
+        setState(() {
+          _room = result.data;
+          _isLoadingRoom = false;
+        });
+      } else {
+        setState(() => _isLoadingRoom = false);
+      }
+    } catch (e) {
+      debugPrint('Error loading room: $e');
+      if (mounted) {
+        setState(() => _isLoadingRoom = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.registrations.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Room Header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.blue[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue[200]!),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.room, size: 20, color: Colors.blue[700]),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _isLoadingRoom
+                      ? 'Loading...'
+                      : _room?.name ?? 'Room ${widget.roomId}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue[900],
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.blue[200],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${widget.registrations.length} student${widget.registrations.length > 1 ? 's' : ''}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.blue[900],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Registrations for this room
+        ...widget.registrations.map((registration) {
+          final isSelected = widget.selectedIds.contains(registration.id);
+          return _RegistrationCard(
+            registration: registration,
+            isSelectionMode: widget.isSelectionMode,
+            isSelected: isSelected,
+            onSelectionChanged: (selected) => widget.onSelectionChanged(registration.id, selected),
+            onApprove: () => widget.onApprove(registration.id),
+            onReject: () => widget.onReject(registration.id),
+          );
+        }),
+
+        const SizedBox(height: 16),
+      ],
     );
   }
 }
