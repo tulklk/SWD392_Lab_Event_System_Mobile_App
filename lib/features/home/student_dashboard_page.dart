@@ -91,7 +91,19 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
     
     if (mounted) {
       setState(() {
-        _upcomingEvents = result.isSuccess ? result.data! : [];
+        if (result.isSuccess && result.data != null) {
+          // Sort by CreatedAt descending (newest first) and take only 3
+          final sortedEvents = List<Event>.from(result.data!)
+            ..sort((a, b) {
+              // Sort by CreatedAt descending (newest first)
+              final aCreated = a.createdAt ?? DateTime(1970);
+              final bCreated = b.createdAt ?? DateTime(1970);
+              return bCreated.compareTo(aCreated);
+            });
+          _upcomingEvents = sortedEvents.take(3).toList();
+        } else {
+          _upcomingEvents = [];
+        }
         _isLoadingEvents = false;
       });
     }
@@ -402,7 +414,7 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
                 ),
               )
             else
-              ..._upcomingEvents.take(3).map((event) => Padding(
+              ..._upcomingEvents.map((event) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _StudentEventCard(event: event),
               )).toList(),

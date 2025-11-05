@@ -235,7 +235,16 @@ class BookingRepository {
 
   // Approve booking (Lecturer/Admin only)
   Future<Result<void>> approveBooking(String id) async {
+    debugPrint('═══════════════════════════════════════════════════════════');
+    debugPrint('🚀 BookingRepository.approveBooking() CALLED');
+    debugPrint('   Booking ID: $id');
+    debugPrint('   Timestamp: ${DateTime.now().toIso8601String()}');
+    debugPrint('═══════════════════════════════════════════════════════════');
+    
     try {
+      debugPrint('✅ Step 1: Approving booking: $id');
+      
+      // Update booking status
       await _supabase
           .from('tbl_bookings')
           .update({
@@ -244,8 +253,113 @@ class BookingRepository {
           })
           .eq('Id', id);
 
+      debugPrint('✅ Step 2: Booking approved successfully in database');
+      debugPrint('   Status updated to: Approved (1)');
+      
+      // Send notification to student about approval
+      debugPrint('');
+      debugPrint('📤 Step 3: Preparing to send notification to student...');
+      try {
+        final notificationService = NotificationService();
+        final eventRepository = EventRepository();
+        
+        // Get booking to find student and event
+        debugPrint('🔍 BookingRepository: Fetching booking details for ID: $id');
+        final bookingResult = await getBookingById(id);
+        
+        if (!bookingResult.isSuccess) {
+          debugPrint('❌ BookingRepository: Failed to get booking: ${bookingResult.error}');
+        } else if (bookingResult.data == null) {
+          debugPrint('❌ BookingRepository: Booking not found with ID: $id');
+        } else {
+          final booking = bookingResult.data!;
+          final studentId = booking.userId;
+          final eventId = booking.eventId;
+          
+          debugPrint('📋 BookingRepository: Booking details found');
+          debugPrint('   Student ID: $studentId');
+          debugPrint('   Event ID: $eventId');
+          
+          if (eventId != null && eventId.isNotEmpty) {
+            // This is an event booking - get event title
+            debugPrint('🔍 BookingRepository: Fetching event details for ID: $eventId');
+            final eventResult = await eventRepository.getEventById(eventId);
+            
+            if (!eventResult.isSuccess) {
+              debugPrint('❌ BookingRepository: Failed to get event: ${eventResult.error}');
+            } else if (eventResult.data == null) {
+              debugPrint('❌ BookingRepository: Event not found');
+            } else {
+              final eventTitle = eventResult.data!.title;
+              debugPrint('✅ BookingRepository: Event found - "$eventTitle"');
+              
+              // Send notification to student
+              debugPrint('📤 BookingRepository: Sending notification to student...');
+              final notificationResult = await notificationService.notifyStudentOfApproval(
+                studentId: studentId,
+                eventTitle: eventTitle,
+                bookingId: id,
+              );
+              
+              if (notificationResult) {
+                debugPrint('✅ BookingRepository: Notification sent successfully to student: $studentId');
+              } else {
+                debugPrint('❌ BookingRepository: Failed to send notification to student: $studentId');
+                debugPrint('   Possible reasons:');
+                debugPrint('   1. Student has not logged in and initialized FCM');
+                debugPrint('   2. Student has not granted notification permissions');
+                debugPrint('   3. FCM token not found in database');
+                debugPrint('   4. FCM Service Account authentication failed');
+              }
+            }
+          } else {
+            // This is a lab booking (not event booking) - use purpose as title
+            final purpose = booking.purpose ?? 'lab booking';
+            debugPrint('📋 BookingRepository: This is a lab booking (not event)');
+            debugPrint('   Purpose: $purpose');
+            
+            // Send notification to student with lab booking info
+            debugPrint('📤 BookingRepository: Sending notification to student for lab booking...');
+            final notificationResult = await notificationService.sendNotificationToUser(
+              userId: studentId,
+              title: 'Booking Approved',
+              body: 'Lịch booking của bạn cho "$purpose" đã thành công!',
+              targetGroup: 'student',
+              data: {
+                'type': 'booking_approved',
+                'bookingId': id,
+                'purpose': purpose,
+              },
+            );
+            
+            if (notificationResult) {
+              debugPrint('✅ BookingRepository: Notification sent successfully to student: $studentId');
+            } else {
+              debugPrint('❌ BookingRepository: Failed to send notification to student: $studentId');
+            }
+          }
+        }
+      } catch (e, stackTrace) {
+        debugPrint('❌ BookingRepository: Exception while sending notification: $e');
+        debugPrint('   Stack trace: $stackTrace');
+        // Don't fail approval if notification fails
+      }
+      
+      debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('✅ BookingRepository.approveBooking() COMPLETED SUCCESSFULLY');
+      debugPrint('   Booking ID: $id');
+      debugPrint('   Timestamp: ${DateTime.now().toIso8601String()}');
+      debugPrint('═══════════════════════════════════════════════════════════');
+      
       return const Success(null);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('❌ BookingRepository.approveBooking() FAILED');
+      debugPrint('   Booking ID: $id');
+      debugPrint('   Error: $e');
+      debugPrint('   Stack trace: $stackTrace');
+      debugPrint('═══════════════════════════════════════════════════════════');
+      
       return Failure('Failed to approve booking: $e');
     }
   }
