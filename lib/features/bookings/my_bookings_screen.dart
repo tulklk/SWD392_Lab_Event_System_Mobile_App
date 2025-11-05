@@ -234,22 +234,26 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     
     final now = DateTime.now();
     // Upcoming: TẤT CẢ Pending (chờ duyệt) HOẶC (chưa kết thúc VÀ không cancelled)
-    final upcomingBookings = _bookings
+    final allUpcomingBookings = _bookings
         .where((b) => b.isPending || (b.endTime.isAfter(now) && !b.isCancelled))
+        .toList();
+    
+    // Separate into Pending and Approved
+    final pendingBookings = allUpcomingBookings
+        .where((b) => b.isPending)
         .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt)); // Newest first (mới nhất lên đầu)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt)); // Newest first
+    
+    final approvedBookings = allUpcomingBookings
+        .where((b) => b.isApproved && !b.isPending)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt)); // Newest first
     
     debugPrint('🔍 Total bookings: ${_bookings.length}');
-    debugPrint('✅ Upcoming bookings: ${upcomingBookings.length}');
-    for (final b in upcomingBookings) {
-      final statusText = b.isPending ? 'Pending (chờ duyệt)' 
-          : b.isApproved ? 'Approved' 
-          : b.isRejected ? 'Rejected' 
-          : 'Cancelled';
-      debugPrint('  - ${b.purpose} | ${b.startTime} - ${b.endTime} | Status: $statusText');
-    }
+    debugPrint('⏳ Pending bookings: ${pendingBookings.length}');
+    debugPrint('✅ Approved bookings: ${approvedBookings.length}');
     
-    if (upcomingBookings.isEmpty) {
+    if (pendingBookings.isEmpty && approvedBookings.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -291,21 +295,86 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     
     return RefreshIndicator(
       onRefresh: _loadBookings,
-      child: ListView.builder(
+      child: ListView(
         padding: const EdgeInsets.all(16),
-        itemCount: upcomingBookings.length,
-        itemBuilder: (context, index) {
-          final booking = upcomingBookings[index];
-          return Padding(
-            padding: EdgeInsets.only(bottom: index < upcomingBookings.length - 1 ? 16 : 0),
-            child: _BookingCardWithRoom(
-              booking: booking,
-              isUpcoming: true,
-              onCancel: _showCancelDialog,
-            ),
-          );
-        },
+        children: [
+          // Pending Section
+          if (pendingBookings.isNotEmpty) ...[
+            _buildSectionHeader('Pending', pendingBookings.length, const Color(0xFFF59E0B)),
+            const SizedBox(height: 12),
+            ...pendingBookings.asMap().entries.map((entry) {
+              final index = entry.key;
+              final booking = entry.value;
+              return Padding(
+                padding: EdgeInsets.only(bottom: index < pendingBookings.length - 1 ? 16 : 24),
+                child: _BookingCardWithRoom(
+                  booking: booking,
+                  isUpcoming: true,
+                  onCancel: _showCancelDialog,
+                ),
+              );
+            }),
+          ],
+          
+          // Approved Section
+          if (approvedBookings.isNotEmpty) ...[
+            _buildSectionHeader('Approved', approvedBookings.length, const Color(0xFF10B981)),
+            const SizedBox(height: 12),
+            ...approvedBookings.asMap().entries.map((entry) {
+              final index = entry.key;
+              final booking = entry.value;
+              return Padding(
+                padding: EdgeInsets.only(bottom: index < approvedBookings.length - 1 ? 16 : 0),
+                child: _BookingCardWithRoom(
+                  booking: booking,
+                  isUpcoming: true,
+                  onCancel: _showCancelDialog,
+                ),
+              );
+            }),
+          ],
+        ],
       ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, int count, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 20,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF1E293B),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            count.toString(),
+            style: TextStyle(
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
