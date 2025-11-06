@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/config/supabase_config.dart';
@@ -10,17 +11,30 @@ class EquipmentRepository {
   // Get all equipment
   Future<Result<List<Equipment>>> getAllEquipment() async {
     try {
+      debugPrint('🔍 EquipmentRepository: Fetching all equipment from Supabase...');
       final response = await _supabase
           .from('tbl_equipments')
           .select()
           .order('CreatedAt', ascending: false);
 
-      final equipment = (response as List)
-          .map((json) => Equipment.fromJson(json as Map<String, dynamic>))
-          .toList();
+      debugPrint('✅ EquipmentRepository: Received ${(response as List).length} equipment from Supabase');
+      
+      final equipment = <Equipment>[];
+      for (var json in (response as List)) {
+        try {
+          final eq = Equipment.fromJson(json as Map<String, dynamic>);
+          equipment.add(eq);
+        } catch (e) {
+          debugPrint('⚠️ EquipmentRepository: Failed to parse equipment: $e');
+          debugPrint('   JSON: $json');
+        }
+      }
 
+      debugPrint('✅ EquipmentRepository: Successfully parsed ${equipment.length} equipment');
       return Success(equipment);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ EquipmentRepository: Failed to fetch equipment: $e');
+      debugPrint('   Stack trace: $stackTrace');
       return Failure('Failed to fetch equipment: $e');
     }
   }
