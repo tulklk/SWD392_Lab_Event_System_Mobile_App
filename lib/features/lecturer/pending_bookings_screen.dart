@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -7,11 +8,56 @@ import '../../data/repositories/user_repository.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/models/room.dart';
 import '../../domain/models/user.dart';
+import '../auth/auth_controller.dart';
 
-final pendingBookingsProvider = FutureProvider<List<Booking>>((ref) async {
-  final bookingRepository = ref.watch(bookingRepositoryProvider);
-  final result = await bookingRepository.getPendingBookings();
-  return result.data ?? [];
+final pendingBookingsProvider = FutureProvider.autoDispose<List<Booking>>((ref) async {
+  try {
+    debugPrint('═══════════════════════════════════════════════════════════');
+    debugPrint('🚀 pendingBookingsProvider: STARTED');
+    debugPrint('   Timestamp: ${DateTime.now().toIso8601String()}');
+    debugPrint('═══════════════════════════════════════════════════════════');
+    
+    final bookingRepository = ref.watch(bookingRepositoryProvider);
+    final currentUser = ref.watch(currentUserProvider);
+    
+    debugPrint('📋 pendingBookingsProvider: Getting current user...');
+    debugPrint('   Current user: ${currentUser?.id} (${currentUser?.name}), Role: ${currentUser?.role}');
+    
+    // Get lecturer ID if current user is lecturer
+    final lecturerId = currentUser?.id;
+    
+    if (lecturerId == null) {
+      debugPrint('⚠️ pendingBookingsProvider: No current user, returning empty list');
+      return [];
+    }
+    
+    debugPrint('🔍 pendingBookingsProvider: Calling getPendingBookings with lecturerId: $lecturerId');
+    final result = await bookingRepository.getPendingBookings(lecturerId: lecturerId);
+    
+    if (result.isSuccess) {
+      debugPrint('✅ pendingBookingsProvider: Success, returning ${result.data?.length ?? 0} bookings');
+      if (result.data != null && result.data!.isNotEmpty) {
+        for (final booking in result.data!) {
+          debugPrint('   ✅ Booking: ${booking.id}, EventId: ${booking.eventId}, Purpose: ${booking.purpose}');
+        }
+      }
+    } else {
+      debugPrint('❌ pendingBookingsProvider: Failed: ${result.error}');
+    }
+    
+    debugPrint('═══════════════════════════════════════════════════════════');
+    debugPrint('🏁 pendingBookingsProvider: COMPLETED');
+    debugPrint('═══════════════════════════════════════════════════════════');
+    
+    return result.data ?? [];
+  } catch (e, stackTrace) {
+    debugPrint('═══════════════════════════════════════════════════════════');
+    debugPrint('💥 pendingBookingsProvider: EXCEPTION!');
+    debugPrint('   Error: $e');
+    debugPrint('   Stack trace: $stackTrace');
+    debugPrint('═══════════════════════════════════════════════════════════');
+    return [];
+  }
 });
 
 class PendingBookingsScreen extends ConsumerWidget {
@@ -19,12 +65,22 @@ class PendingBookingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    debugPrint('═══════════════════════════════════════════════════════════');
+    debugPrint('🖥️ PendingBookingsScreen.build() CALLED');
+    debugPrint('   Timestamp: ${DateTime.now().toIso8601String()}');
+    debugPrint('═══════════════════════════════════════════════════════════');
+    
     final pendingBookingsAsync = ref.watch(pendingBookingsProvider);
+    
+    debugPrint('📊 PendingBookingsScreen: Watching pendingBookingsProvider');
 
     return Scaffold(
       body: pendingBookingsAsync.when(
         data: (bookings) {
+          debugPrint('📦 PendingBookingsScreen: Received data, ${bookings.length} bookings');
+          
           if (bookings.isEmpty) {
+            debugPrint('⚠️ PendingBookingsScreen: Bookings list is empty');
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -55,6 +111,8 @@ class PendingBookingsScreen extends ConsumerWidget {
               ),
             );
           }
+          
+          debugPrint('✅ PendingBookingsScreen: Displaying ${bookings.length} bookings');
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -78,26 +136,34 @@ class PendingBookingsScreen extends ConsumerWidget {
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
-              const SizedBox(height: 16),
-              Text(
-                'Error loading bookings',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                error.toString(),
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
+        loading: () {
+          debugPrint('⏳ PendingBookingsScreen: Loading state');
+          return const Center(child: CircularProgressIndicator());
+        },
+        error: (error, stack) {
+          debugPrint('❌ PendingBookingsScreen: Error state');
+          debugPrint('   Error: $error');
+          debugPrint('   Stack: $stack');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
+                const SizedBox(height: 16),
+                Text(
+                  'Error loading bookings',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  error.toString(),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

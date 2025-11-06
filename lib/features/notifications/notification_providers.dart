@@ -63,15 +63,28 @@ void refreshNotifications(WidgetRef ref) {
   ref.invalidate(userNotificationsProvider);
 }
 
-/// Helper to get notification type from content
-String getNotificationType(String content) {
-  if (content.toLowerCase().contains('registered') || 
-      content.toLowerCase().contains('booking')) {
-    return 'booking_created';
-  } else if (content.toLowerCase().contains('approved')) {
+/// Helper to get notification type from content or title
+String getNotificationType(String content, {String? title}) {
+  // Check title first (more reliable)
+  if (title != null) {
+    final titleLower = title.toLowerCase();
+    if (titleLower.contains('approved')) {
+      return 'booking_approved';
+    } else if (titleLower.contains('rejected')) {
+      return 'booking_rejected';
+    } else if (titleLower.contains('registration') || titleLower.contains('booking')) {
+      return 'booking_created';
+    }
+  }
+  
+  // Fallback to content parsing
+  final contentLower = content.toLowerCase();
+  if (contentLower.contains('approved')) {
     return 'booking_approved';
-  } else if (content.toLowerCase().contains('rejected')) {
+  } else if (contentLower.contains('rejected')) {
     return 'booking_rejected';
+  } else if (contentLower.contains('registered') || contentLower.contains('booking')) {
+    return 'booking_created';
   }
   return 'general';
 }

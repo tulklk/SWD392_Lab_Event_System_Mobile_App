@@ -13,6 +13,7 @@ import '../../domain/models/user.dart';
 import '../../domain/models/event.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/models/room.dart';
+import 'pending_bookings_screen.dart';
 
 final eventRegistrationsProvider = FutureProvider.family<List<EventRegistration>, String>(
   (ref, eventId) async {
@@ -343,6 +344,9 @@ class _EventRegistrationsScreenState extends ConsumerState<EventRegistrationsScr
           ),
         );
         ref.invalidate(eventRegistrationsProvider(widget.eventId));
+        ref.invalidate(eventBookingsProvider(widget.eventId));
+        // Also refresh pending bookings in Approvals tab
+        ref.invalidate(pendingBookingsProvider);
       } else {
         debugPrint('❌ EventRegistrationsScreen: Approval failed, showing error message');
         ScaffoldMessenger.of(context).showSnackBar(
@@ -390,6 +394,9 @@ class _EventRegistrationsScreenState extends ConsumerState<EventRegistrationsScr
             ),
           );
           ref.invalidate(eventRegistrationsProvider(widget.eventId));
+          ref.invalidate(eventBookingsProvider(widget.eventId));
+          // Also refresh pending bookings in Approvals tab
+          ref.invalidate(pendingBookingsProvider);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -441,6 +448,9 @@ class _EventRegistrationsScreenState extends ConsumerState<EventRegistrationsScr
             _selectedIds.clear();
           });
           ref.invalidate(eventRegistrationsProvider(widget.eventId));
+          ref.invalidate(eventBookingsProvider(widget.eventId));
+          // Also refresh pending bookings in Approvals tab
+          ref.invalidate(pendingBookingsProvider);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

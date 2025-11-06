@@ -226,18 +226,6 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.notifications_outlined,
-                      color: Color(0xFF64748B),
-                      size: 24,
-                    ),
-                  ),
                 ],
               ),
             ),

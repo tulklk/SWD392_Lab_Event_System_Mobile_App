@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -168,14 +169,20 @@ class NotificationRepository {
           .maybeSingle();
 
       if (existing == null) {
-        // Insert new read record
+        // Insert new read record with UUID
+        final readId = _uuid.v4();
         await _supabase.from('tbl_notification_reads').insert({
+          'Id': readId,
           'NotificationId': notificationId,
           'UserId': userId,
           'ReadAt': now.toIso8601String(),
           'CreatedAt': now.toIso8601String(),
           'LastUpdatedAt': now.toIso8601String(),
         });
+        debugPrint('✅ NotificationRepository: Marked notification as read');
+        debugPrint('   Notification ID: $notificationId');
+        debugPrint('   User ID: $userId');
+        debugPrint('   Read ID: $readId');
       } else {
         // Update read timestamp
         await _supabase
@@ -186,10 +193,14 @@ class NotificationRepository {
             })
             .eq('NotificationId', notificationId)
             .eq('UserId', userId);
+        debugPrint('✅ NotificationRepository: Updated read timestamp for notification');
+        debugPrint('   Notification ID: $notificationId');
+        debugPrint('   User ID: $userId');
       }
 
       return const Success(null);
     } catch (e) {
+      debugPrint('❌ NotificationRepository: Failed to mark notification as read: $e');
       return Failure('Failed to mark notification as read: $e');
     }
   }
@@ -198,6 +209,11 @@ class NotificationRepository {
   Future<Result<void>> markAllAsRead(String userId, List<String> notificationIds) async {
     try {
       final now = DateTime.now();
+      int markedCount = 0;
+      
+      debugPrint('📚 NotificationRepository: Marking all notifications as read');
+      debugPrint('   User ID: $userId');
+      debugPrint('   Total notifications: ${notificationIds.length}');
       
       for (final notificationId in notificationIds) {
         final existing = await _supabase
@@ -208,18 +224,24 @@ class NotificationRepository {
             .maybeSingle();
 
         if (existing == null) {
+          // Insert new read record with UUID
+          final readId = _uuid.v4();
           await _supabase.from('tbl_notification_reads').insert({
+            'Id': readId,
             'NotificationId': notificationId,
             'UserId': userId,
             'ReadAt': now.toIso8601String(),
             'CreatedAt': now.toIso8601String(),
             'LastUpdatedAt': now.toIso8601String(),
           });
+          markedCount++;
         }
       }
 
+      debugPrint('✅ NotificationRepository: Marked $markedCount notifications as read');
       return const Success(null);
     } catch (e) {
+      debugPrint('❌ NotificationRepository: Failed to mark all notifications as read: $e');
       return Failure('Failed to mark all notifications as read: $e');
     }
   }

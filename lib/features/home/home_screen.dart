@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'student_dashboard_page.dart';
@@ -14,6 +15,7 @@ import '../../domain/enums/role.dart';
 import '../auth/auth_controller.dart';
 import '../notifications/notification_screen.dart';
 import '../notifications/notification_providers.dart';
+import '../../data/services/notification_realtime_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -25,6 +27,27 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _selectedIndex = 0;
   int _bookingsRefreshTrigger = 0; // Counter to trigger refresh for My Bookings
+
+  @override
+  void initState() {
+    super.initState();
+    // Start listening to realtime notifications when home screen is opened
+    // This works for all users (student, lecturer, admin)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final realtimeService = ref.read(notificationRealtimeServiceProvider);
+      realtimeService.startListening(ref);
+      debugPrint('🔔 HomeScreen: Started realtime notification listener');
+    });
+  }
+
+  @override
+  void dispose() {
+    // Stop listening when home screen is closed
+    final realtimeService = ref.read(notificationRealtimeServiceProvider);
+    realtimeService.stopListening();
+    debugPrint('🔕 HomeScreen: Stopped realtime notification listener');
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
