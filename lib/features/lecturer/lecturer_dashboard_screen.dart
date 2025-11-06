@@ -50,19 +50,19 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
         setState(() {
           _selectedIndex = index;
         });
-        // Refresh events screen when navigated to Events tab
-        if (index == 1) {
+        // Refresh events screen when navigated to Events tab (now at index 2)
+        if (index == 2) {
           setState(() {
             _eventsRefreshTrigger++; // Trigger refresh
           });
         }
       },
     ),
+    const EquipmentScreen(),
     LecturerEventsScreen(
       key: ValueKey(_eventsRefreshTrigger), // Rebuild when trigger changes
     ),
     const PendingBookingsScreen(),
-    const EquipmentScreen(),
   ];
 
   @override
@@ -253,32 +253,32 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
           setState(() {
             _selectedIndex = index;
           });
-          // Refresh events screen when Events tab is selected
+          // Refresh equipment when Equipment tab is selected (index 1)
           if (index == 1) {
-            // Events tab is at index 1 - trigger refresh by updating key
-            debugPrint('🔄 LecturerDashboardScreen: Refreshing Events tab');
-            setState(() {
-              _eventsRefreshTrigger++;
-            });
-          }
-          // Refresh pending bookings when Approvals tab is selected (index 2)
-          // Use post-frame callback to ensure widget is mounted before invalidating
-          if (index == 2) {
-            debugPrint('🔄 LecturerDashboardScreen: Scheduling Approvals tab refresh');
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                debugPrint('🔄 LecturerDashboardScreen: Refreshing Approvals tab');
-                ref.invalidate(pendingBookingsProvider);
-              }
-            });
-          }
-          // Refresh equipment when Equipment tab is selected (index 3)
-          if (index == 3) {
             debugPrint('🔄 LecturerDashboardScreen: Scheduling Equipment tab refresh');
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
                 debugPrint('🔄 LecturerDashboardScreen: Refreshing Equipment tab');
                 // Equipment providers will auto-refresh when accessed
+              }
+            });
+          }
+          // Refresh events screen when Events tab is selected (index 2)
+          if (index == 2) {
+            // Events tab is at index 2 - trigger refresh by updating key
+            debugPrint('🔄 LecturerDashboardScreen: Refreshing Events tab');
+            setState(() {
+              _eventsRefreshTrigger++;
+            });
+          }
+          // Refresh pending bookings when Approvals tab is selected (index 3)
+          // Use post-frame callback to ensure widget is mounted before invalidating
+          if (index == 3) {
+            debugPrint('🔄 LecturerDashboardScreen: Scheduling Approvals tab refresh');
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                debugPrint('🔄 LecturerDashboardScreen: Refreshing Approvals tab');
+                ref.invalidate(pendingBookingsProvider);
               }
             });
           }
@@ -290,6 +290,11 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
             label: 'Overview',
           ),
           NavigationDestination(
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2),
+            label: 'Equipment',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.event_outlined),
             selectedIcon: Icon(Icons.event),
             label: 'Events',
@@ -298,11 +303,6 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
             icon: Icon(Icons.approval_outlined),
             selectedIcon: Icon(Icons.approval),
             label: 'Approvals',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            selectedIcon: Icon(Icons.inventory_2),
-            label: 'Equipment',
           ),
         ],
       ),
@@ -496,8 +496,8 @@ class _LecturerOverviewPageState extends ConsumerState<LecturerOverviewPage> {
                   subtitle: 'Review bookings',
                   color: Colors.orange,
                   onTap: () {
-                    // Navigate to approvals tab (index 2)
-                    widget.onTabChange?.call(2);
+                    // Navigate to approvals tab (index 3)
+                    widget.onTabChange?.call(3);
                   },
                 ),
               ),
@@ -513,8 +513,8 @@ class _LecturerOverviewPageState extends ConsumerState<LecturerOverviewPage> {
                   subtitle: 'Browse & borrow',
                   color: Colors.purple,
                   onTap: () {
-                    // Navigate to equipment tab (index 3)
-                    widget.onTabChange?.call(3);
+                    // Navigate to equipment tab (index 1)
+                    widget.onTabChange?.call(1);
                   },
                 ),
               ),
@@ -550,7 +550,7 @@ class _LecturerOverviewPageState extends ConsumerState<LecturerOverviewPage> {
             subtitle: 'Ongoing workshops',
             color: Colors.green,
             onTap: () {
-              widget.onTabChange?.call(1); // Navigate to Events tab
+              widget.onTabChange?.call(2); // Navigate to Events tab (now at index 2)
             },
           ),
           const SizedBox(height: 12),

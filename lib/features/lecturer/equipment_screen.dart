@@ -645,26 +645,6 @@ class _EquipmentDetailSheet extends ConsumerWidget {
                             .format(equipment.nextMaintenanceDate!),
                       ),
                     const SizedBox(height: 20),
-
-                    // Borrow Button
-                    if (equipment.isActive)
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            _showBorrowDialog(context, equipment);
-                          },
-                          icon: const Icon(Icons.handshake_outlined),
-                          label: const Text('Request to Borrow'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -675,37 +655,6 @@ class _EquipmentDetailSheet extends ConsumerWidget {
     );
   }
 
-  void _showBorrowDialog(BuildContext context, Equipment equipment) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Request to Borrow Equipment'),
-        content: Text(
-          'You are requesting to borrow "${equipment.name}". '
-          'This request will be sent to the lab administrator for approval.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Borrow request for "${equipment.name}" submitted'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-              // TODO: Implement actual borrow request logic
-            },
-            child: const Text('Submit Request'),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _DetailRow extends StatelessWidget {

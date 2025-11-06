@@ -11,6 +11,8 @@ import '../../domain/models/lab.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/room_repository.dart';
 import '../../data/repositories/lab_repository.dart';
+import '../../data/repositories/user_repository.dart';
+import '../../domain/models/user.dart' as app_models;
 
 class StudentDashboardPage extends ConsumerStatefulWidget {
   final Function(int)? onTabChange;
@@ -509,11 +511,33 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
   Room? _room;
   Lab? _lab;
   bool _isLoadingRoomLab = false;
+  app_models.User? _creator;
+  bool _isLoadingCreator = false;
 
   @override
   void initState() {
     super.initState();
     _loadRoomAndLab();
+    _loadCreator();
+  }
+
+  Future<void> _loadCreator() async {
+    setState(() => _isLoadingCreator = true);
+    try {
+      final userRepository = ref.read(userRepositoryProvider);
+      final result = await userRepository.getUserById(widget.event.createdBy);
+      if (result.isSuccess && result.data != null) {
+        setState(() {
+          _creator = result.data;
+          _isLoadingCreator = false;
+        });
+      } else {
+        setState(() => _isLoadingCreator = false);
+      }
+    } catch (e) {
+      debugPrint('Error loading creator: $e');
+      setState(() => _isLoadingCreator = false);
+    }
   }
 
   Future<void> _loadRoomAndLab() async {
@@ -797,6 +821,34 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
                     fontSize: 13,
                     color: Colors.grey[600],
                   ),
+                ),
+              ],
+              // Lecturer info
+              if (_creator != null || _isLoadingCreator) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.person_outline, size: 16, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    if (_isLoadingCreator)
+                      SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.grey[600],
+                        ),
+                      )
+                    else
+                      Text(
+                        'Lecturer: ${_creator?.fullname ?? 'Unknown'}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                  ],
                 ),
               ],
               const SizedBox(height: 8),
