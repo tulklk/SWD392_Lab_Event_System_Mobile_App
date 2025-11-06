@@ -12,6 +12,8 @@ import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/room_repository.dart';
 import '../../data/repositories/lab_repository.dart';
 import '../../data/repositories/booking_repository.dart';
+import '../../data/repositories/user_repository.dart';
+import '../../domain/models/user.dart' as app_models;
 import '../auth/auth_controller.dart';
 import '../bookings/booking_providers.dart';
 
@@ -29,6 +31,7 @@ class _StudentEventsScreenState extends ConsumerState<StudentEventsScreen>
   bool _isLoading = true;
   String _searchQuery = '';
   DateTime? _lastRefreshTime;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   bool get wantKeepAlive => true;
@@ -43,6 +46,7 @@ class _StudentEventsScreenState extends ConsumerState<StudentEventsScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -184,32 +188,80 @@ class _StudentEventsScreenState extends ConsumerState<StudentEventsScreen>
         children: [
           // Search Bar
           Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
             child: TextField(
+              controller: _searchController,
               onChanged: (value) {
                 setState(() {
                   _searchQuery = value;
                 });
                 _filterEvents();
               },
-              decoration: const InputDecoration(
+              style: const TextStyle(
+                fontSize: 15,
+                color: Color(0xFF1E293B),
+                fontWeight: FontWeight.w500,
+              ),
+              decoration: InputDecoration(
                 hintText: 'Search events...',
-                hintStyle: TextStyle(color: Color(0xFF64748B)),
-                prefixIcon: Icon(Icons.search, color: Color(0xFF64748B)),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(vertical: 16),
+                hintStyle: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 15,
+                  fontWeight: FontWeight.normal,
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: Colors.grey[600],
+                  size: 22,
+                ),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(
+                          Icons.clear,
+                          color: Colors.grey[600],
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                          });
+                          _filterEvents();
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(
+                    color: const Color(0xFFFF6600).withOpacity(0.5),
+                    width: 2,
+                  ),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 18,
+                ),
               ),
             ),
           ),
@@ -297,12 +349,34 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
   bool _isLoadingRoomLab = false;
   bool _isRegistered = false;
   bool _isCheckingRegistration = true;
+  app_models.User? _creator;
+  bool _isLoadingCreator = false;
 
   @override
   void initState() {
     super.initState();
     _loadRoomAndLab();
     _checkRegistration();
+    _loadCreator();
+  }
+
+  Future<void> _loadCreator() async {
+    setState(() => _isLoadingCreator = true);
+    try {
+      final userRepository = ref.read(userRepositoryProvider);
+      final result = await userRepository.getUserById(widget.event.createdBy);
+      if (result.isSuccess && result.data != null) {
+        setState(() {
+          _creator = result.data;
+          _isLoadingCreator = false;
+        });
+      } else {
+        setState(() => _isLoadingCreator = false);
+      }
+    } catch (e) {
+      debugPrint('Error loading creator: $e');
+      setState(() => _isLoadingCreator = false);
+    }
   }
 
   Future<void> _loadRoomAndLab() async {
@@ -851,6 +925,34 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
                     fontSize: 13,
                     color: Colors.grey[600],
                   ),
+                ),
+              ],
+              // Lecturer info
+              if (_creator != null || _isLoadingCreator) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.person_outline, size: 16, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    if (_isLoadingCreator)
+                      SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.grey[600],
+                        ),
+                      )
+                    else
+                      Text(
+                        'Lecturer: ${_creator?.fullname ?? 'Unknown'}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                  ],
                 ),
               ],
               const SizedBox(height: 8),

@@ -11,6 +11,10 @@ import '../../domain/models/lab.dart';
 import '../../data/repositories/booking_repository.dart';
 import '../../data/repositories/room_repository.dart';
 import '../../data/repositories/lab_repository.dart';
+import '../../data/repositories/user_repository.dart';
+import '../../data/repositories/event_repository.dart';
+import '../../domain/models/user.dart' as app_models;
+import '../../domain/models/event.dart';
 import '../../core/utils/result.dart';
 import '../auth/auth_controller.dart';
 import 'booking_providers.dart';
@@ -201,16 +205,42 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
         child: Column(
           children: [
             Container(
-              color: Colors.white,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
               child: const TabBar(
                 tabs: [
-                  Tab(text: 'Upcoming'),
-                  Tab(text: 'Past'),
+                  Tab(
+                    child: Text(
+                      'Upcoming',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Tab(
+                    child: Text(
+                      'Past',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ],
-                labelColor: Color(0xFF1E293B),
+                labelColor: Color(0xFFFF6600),
                 unselectedLabelColor: Color(0xFF64748B),
                 indicatorColor: Color(0xFFFF6600),
                 indicatorWeight: 3,
+                indicatorSize: TabBarIndicatorSize.tab,
               ),
             ),
             Expanded(
@@ -339,42 +369,36 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   }
 
   Widget _buildSectionHeader(String title, int count, Color color) {
-    return Row(
-      children: [
-        Container(
-          width: 4,
-          height: 20,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: const Color(0xFF1E293B),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            count.toString(),
-            style: TextStyle(
-              color: color,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1E293B),
             ),
           ),
-        ),
-      ],
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              count.toString(),
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -514,11 +538,46 @@ class _BookingCardWithRoomState extends ConsumerState<_BookingCardWithRoom> {
   Room? _room;
   Lab? _lab;
   bool _isLoadingRoomLab = true;
+  app_models.User? _creator;
+  bool _isLoadingCreator = false;
 
   @override
   void initState() {
     super.initState();
     _loadRoomAndLab();
+    _loadCreator();
+  }
+
+  Future<void> _loadCreator() async {
+    if (widget.booking.eventId == null || widget.booking.eventId!.isEmpty) {
+      return;
+    }
+    
+    setState(() => _isLoadingCreator = true);
+    try {
+      final eventRepository = EventRepository();
+      final eventResult = await eventRepository.getEventById(widget.booking.eventId!);
+      
+      if (eventResult.isSuccess && eventResult.data != null) {
+        final event = eventResult.data!;
+        final userRepository = UserRepository();
+        final userResult = await userRepository.getUserById(event.createdBy);
+        
+        if (userResult.isSuccess && userResult.data != null && mounted) {
+          setState(() {
+            _creator = userResult.data;
+            _isLoadingCreator = false;
+          });
+        } else {
+          setState(() => _isLoadingCreator = false);
+        }
+      } else {
+        setState(() => _isLoadingCreator = false);
+      }
+    } catch (e) {
+      debugPrint('Error loading creator: $e');
+      setState(() => _isLoadingCreator = false);
+    }
   }
 
   Future<void> _loadRoomAndLab() async {
@@ -583,193 +642,234 @@ class _BookingCardWithRoomState extends ConsumerState<_BookingCardWithRoom> {
     final currentUser = ref.watch(currentUserProvider);
     final isStudent = currentUser?.role == Role.student;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        side: BorderSide(
+          color: Colors.grey[200]!,
+          width: 1,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.booking.purpose,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        widget.booking.bookingStatus.displayName,
-                        style: TextStyle(
-                          color: statusColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          
-          // Lab and Room info
-          if (_lab != null || _room != null || _isLoadingRoomLab) ...[
-            if (_isLoadingRoomLab)
-              Row(
-                children: [
-                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Loading location...',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              )
-            else ...[
-              if (_lab != null) ...[
-                Row(
-                  children: [
-                    Icon(Icons.science, size: 16, color: Colors.orange[700]),
-                    const SizedBox(width: 8),
-                    Text(
-                      _lab!.name,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.orange[700],
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-              ],
-              if (_room != null) ...[
-                Row(
-                  children: [
-                    Icon(Icons.room, size: 16, color: Colors.blue[700]),
-                    const SizedBox(width: 8),
-                    Text(
-                      _room!.name,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.blue[700],
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-              ],
-            ],
-          ],
-          
-          Row(
-            children: [
-              const Icon(Icons.calendar_today, size: 16, color: Color(0xFF64748B)),
-              const SizedBox(width: 8),
-              Text(
-                _formatDate(widget.booking.date),
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const Icon(Icons.access_time, size: 16, color: Color(0xFF64748B)),
-              const SizedBox(width: 8),
-              Text(
-                '${_formatTime(widget.booking.start)} - ${_formatTime(widget.booking.end)}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-            ],
-          ),
-          if (widget.booking.notes != null && widget.booking.notes!.isNotEmpty) ...[
-            const SizedBox(height: 8),
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Title and Status
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.note, size: 16, color: Color(0xFF64748B)),
-                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    widget.booking.notes!,
+                    widget.booking.purpose,
                     style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF64748B),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1E293B),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    widget.booking.bookingStatus.displayName,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
             ),
-          ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              // QR Code button for approved bookings
-              if (widget.isUpcoming && widget.booking.isApproved) ...[
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      context.push('/qr-ticket', extra: widget.booking);
-                    },
-                    icon: const Icon(Icons.qr_code, size: 18),
-                    label: const Text('View QR'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF1A73E8),
-                      side: const BorderSide(color: Color(0xFF1A73E8)),
+            const SizedBox(height: 16),
+            
+            // Lab and Room info - Simple layout
+            if (_lab != null || _room != null || _isLoadingRoomLab) ...[
+              if (_isLoadingRoomLab)
+                Row(
+                  children: [
+                    const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Loading location...',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[600],
+                      ),
                     ),
+                  ],
+                )
+              else ...[
+                if (_lab != null) ...[
+                  Row(
+                    children: [
+                      Icon(Icons.science, size: 16, color: Colors.grey[600]),
+                      const SizedBox(width: 8),
+                      Text(
+                        _lab!.name,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[800],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              
-              // Cancel button - ONLY for Admin/Lecturer, NOT for Student
-              if (widget.isUpcoming && !widget.booking.isCancelled && !isStudent) ...[
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => widget.onCancel(widget.booking),
-                    icon: const Icon(Icons.cancel, size: 18),
-                    label: const Text('Cancel'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                    ),
+                  const SizedBox(height: 8),
+                ],
+                if (_room != null) ...[
+                  Row(
+                    children: [
+                      Icon(Icons.room, size: 16, color: Colors.grey[600]),
+                      const SizedBox(width: 8),
+                      Text(
+                        _room!.name,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[800],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
+                  const SizedBox(height: 12),
+                ],
               ],
             ],
-          ),
-        ],
+            
+            // Date and Time - Simple rows
+            Row(
+              children: [
+                Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
+                const SizedBox(width: 8),
+                Text(
+                  _formatDate(widget.booking.date),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                const SizedBox(width: 8),
+                Text(
+                  '${_formatTime(widget.booking.start)} - ${_formatTime(widget.booking.end)}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+            
+            // Notes - Simple text
+            if (widget.booking.notes != null && widget.booking.notes!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.note_outlined, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.booking.notes!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[700],
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            
+            // Lecturer info
+            if (_creator != null || _isLoadingCreator) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.person_outline, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 8),
+                  if (_isLoadingCreator)
+                    SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.grey[600],
+                      ),
+                    )
+                  else
+                    Text(
+                      'Lecturer: ${_creator?.fullname ?? 'Unknown'}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+            
+            // Action buttons
+            if (widget.isUpcoming && widget.booking.isApproved) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    context.push('/qr-ticket', extra: widget.booking);
+                  },
+                  icon: const Icon(Icons.qr_code, size: 18),
+                  label: const Text('View QR Ticket'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6600),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ],
+            
+            // Cancel button - ONLY for Admin/Lecturer, NOT for Student
+            if (widget.isUpcoming && !widget.booking.isCancelled && !isStudent) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => widget.onCancel(widget.booking),
+                  icon: const Icon(Icons.cancel_outlined, size: 18),
+                  label: const Text('Cancel Booking'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red[700],
+                    side: BorderSide(color: Colors.red[700]!, width: 1),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
