@@ -18,6 +18,7 @@ import '../features/admin/manage_events_screen.dart';
 import '../features/lecturer/lecturer_dashboard_screen.dart';
 import '../features/lecturer/create_event_screen.dart';
 import '../features/lecturer/event_registrations_screen.dart';
+import '../features/lecturer/equipment_screen.dart';
 import '../features/notifications/notification_screen.dart';
 import '../features/auth/auth_controller.dart';
 
@@ -201,6 +202,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           final eventId = state.pathParameters['id']!;
           return EventRegistrationsScreen(eventId: eventId);
         },
+      ),
+      GoRoute(
+        path: '/lecturer/equipment',
+        name: 'lecturer-equipment',
+        builder: (context, state) => const EquipmentScreen(),
       ),
       GoRoute(
         path: '/admin',

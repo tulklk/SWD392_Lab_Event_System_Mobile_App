@@ -7,6 +7,7 @@ import '../notifications/notification_providers.dart';
 import '../../data/services/notification_realtime_service.dart';
 import 'lecturer_events_screen.dart';
 import 'pending_bookings_screen.dart';
+import 'equipment_screen.dart';
 import '../../data/repositories/booking_repository.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/event_registration_repository.dart';
@@ -61,6 +62,7 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
       key: ValueKey(_eventsRefreshTrigger), // Rebuild when trigger changes
     ),
     const PendingBookingsScreen(),
+    const EquipmentScreen(),
   ];
 
   @override
@@ -270,6 +272,16 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
               }
             });
           }
+          // Refresh equipment when Equipment tab is selected (index 3)
+          if (index == 3) {
+            debugPrint('🔄 LecturerDashboardScreen: Scheduling Equipment tab refresh');
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                debugPrint('🔄 LecturerDashboardScreen: Refreshing Equipment tab');
+                // Equipment providers will auto-refresh when accessed
+              }
+            });
+          }
         },
         destinations: const [
           NavigationDestination(
@@ -286,6 +298,11 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
             icon: Icon(Icons.approval_outlined),
             selectedIcon: Icon(Icons.approval),
             label: 'Approvals',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2),
+            label: 'Equipment',
           ),
         ],
       ),
@@ -481,6 +498,23 @@ class _LecturerOverviewPageState extends ConsumerState<LecturerOverviewPage> {
                   onTap: () {
                     // Navigate to approvals tab (index 2)
                     widget.onTabChange?.call(2);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _QuickActionCard(
+                  icon: Icons.inventory_2,
+                  title: 'Equipment',
+                  subtitle: 'Browse & borrow',
+                  color: Colors.purple,
+                  onTap: () {
+                    // Navigate to equipment tab (index 3)
+                    widget.onTabChange?.call(3);
                   },
                 ),
               ),

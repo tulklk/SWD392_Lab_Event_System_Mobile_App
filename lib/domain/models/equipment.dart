@@ -59,24 +59,32 @@ class Equipment {
   }
 
   factory Equipment.fromJson(Map<String, dynamic> json) {
-    return Equipment(
-      id: json['Id'] as String,
-      name: json['Name'] as String,
-      description: json['Description'] as String?,
-      serialNumber: json['SerialNumber'] as String?,
-      type: json['Type'] as int,
-      status: json['Status'] as int? ?? 1,
-      imageUrl: json['ImageUrl'] as String?,
-      roomId: json['RoomId'] as String,
-      lastMaintenanceDate: json['LastMaintenanceDate'] != null
-          ? DateTime.parse(json['LastMaintenanceDate'] as String)
-          : null,
-      nextMaintenanceDate: json['NextMaintenanceDate'] != null
-          ? DateTime.parse(json['NextMaintenanceDate'] as String)
-          : null,
-      createdAt: DateTime.parse(json['CreatedAt'] as String),
-      lastUpdatedAt: DateTime.parse(json['LastUpdatedAt'] as String),
-    );
+    try {
+      return Equipment(
+        id: json['Id']?.toString() ?? '',
+        name: json['Name']?.toString() ?? '',
+        description: json['Description']?.toString(),
+        serialNumber: json['SerialNumber']?.toString(),
+        type: (json['Type'] as num?)?.toInt() ?? 0,
+        status: (json['Status'] as num?)?.toInt() ?? 1,
+        imageUrl: json['ImageUrl']?.toString(),
+        roomId: json['RoomId']?.toString() ?? '',
+        lastMaintenanceDate: json['LastMaintenanceDate'] != null
+            ? DateTime.tryParse(json['LastMaintenanceDate'].toString())
+            : null,
+        nextMaintenanceDate: json['NextMaintenanceDate'] != null
+            ? DateTime.tryParse(json['NextMaintenanceDate'].toString())
+            : null,
+        createdAt: json['CreatedAt'] != null
+            ? DateTime.tryParse(json['CreatedAt'].toString()) ?? DateTime.now()
+            : DateTime.now(),
+        lastUpdatedAt: json['LastUpdatedAt'] != null
+            ? DateTime.tryParse(json['LastUpdatedAt'].toString()) ?? DateTime.now()
+            : DateTime.now(),
+      );
+    } catch (e) {
+      throw FormatException('Failed to parse Equipment from JSON: $e\nJSON: $json');
+    }
   }
 
   Map<String, dynamic> toJson() {
