@@ -177,7 +177,7 @@ class NotificationService {
     final result = await sendNotificationToUser(
       userId: studentId,
       title: 'Booking Approved',
-      body: 'Lịch booking của bạn cho sự kiện "$eventTitle" đã thành công!',
+      body: 'Your registration for event "$eventTitle" has been approved!',
       targetGroup: 'student', // Target students
       data: {
         'type': 'booking_approved',

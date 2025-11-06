@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../auth/auth_controller.dart';
 import '../notifications/notification_providers.dart';
+import '../../data/services/notification_realtime_service.dart';
 import 'lecturer_events_screen.dart';
 import 'pending_bookings_screen.dart';
 import '../../data/repositories/booking_repository.dart';
@@ -21,6 +22,26 @@ class LecturerDashboardScreen extends ConsumerStatefulWidget {
 class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScreen> {
   int _selectedIndex = 0;
   int _eventsRefreshTrigger = 0; // Counter to trigger refresh
+
+  @override
+  void initState() {
+    super.initState();
+    // Start listening to realtime notifications when dashboard is opened
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final realtimeService = ref.read(notificationRealtimeServiceProvider);
+      realtimeService.startListening(ref);
+      debugPrint('🔔 LecturerDashboardScreen: Started realtime notification listener');
+    });
+  }
+
+  @override
+  void dispose() {
+    // Stop listening when dashboard is closed
+    final realtimeService = ref.read(notificationRealtimeServiceProvider);
+    realtimeService.stopListening();
+    debugPrint('🔕 LecturerDashboardScreen: Stopped realtime notification listener');
+    super.dispose();
+  }
 
   List<Widget> get _screens => [
     LecturerOverviewPage(
@@ -226,14 +247,27 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {
+          debugPrint('🔄 LecturerDashboardScreen: Tab selected, index: $index');
           setState(() {
             _selectedIndex = index;
           });
           // Refresh events screen when Events tab is selected
           if (index == 1) {
             // Events tab is at index 1 - trigger refresh by updating key
+            debugPrint('🔄 LecturerDashboardScreen: Refreshing Events tab');
             setState(() {
               _eventsRefreshTrigger++;
+            });
+          }
+          // Refresh pending bookings when Approvals tab is selected (index 2)
+          // Use post-frame callback to ensure widget is mounted before invalidating
+          if (index == 2) {
+            debugPrint('🔄 LecturerDashboardScreen: Scheduling Approvals tab refresh');
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                debugPrint('🔄 LecturerDashboardScreen: Refreshing Approvals tab');
+                ref.invalidate(pendingBookingsProvider);
+              }
             });
           }
         },
@@ -296,7 +330,7 @@ class _LecturerOverviewPageState extends ConsumerState<LecturerOverviewPage> {
     try {
       // 1. Get pending approvals count
       final bookingRepository = ref.read(bookingRepositoryProvider);
-      final pendingBookingsResult = await bookingRepository.getPendingBookings();
+      final pendingBookingsResult = await bookingRepository.getPendingBookings(lecturerId: currentUser.id);
       final pendingCount = pendingBookingsResult.isSuccess 
           ? (pendingBookingsResult.data?.length ?? 0)
           : 0;

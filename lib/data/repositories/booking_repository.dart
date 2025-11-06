@@ -323,7 +323,7 @@ class BookingRepository {
             final notificationResult = await notificationService.sendNotificationToUser(
               userId: studentId,
               title: 'Booking Approved',
-              body: 'Lịch booking của bạn cho "$purpose" đã thành công!',
+              body: 'Your registration for "$purpose" has been approved!',
               targetGroup: 'student',
               data: {
                 'type': 'booking_approved',
@@ -396,19 +396,101 @@ class BookingRepository {
   }
 
   // Get pending bookings (for Lecturer/Admin review)
-  Future<Result<List<Booking>>> getPendingBookings() async {
+  // If lecturerId is provided, only returns bookings for events created by that lecturer
+  // If lecturerId is null, returns all pending bookings (for admin)
+  Future<Result<List<Booking>>> getPendingBookings({String? lecturerId}) async {
     try {
-      final response = await _supabase
-          .from('tbl_bookings')
-          .select()
-          .eq('Status', 0) // pending
-          .order('CreatedAt', ascending: false);
+      if (lecturerId != null) {
+        debugPrint('🔍 BookingRepository.getPendingBookings: Getting bookings for lecturer: $lecturerId');
+        
+        // Get events created by this lecturer
+        try {
+          final eventsResult = await _supabase
+              .from('tbl_events')
+              .select('Id, Title, CreatedBy')
+              .eq('CreatedBy', lecturerId);
 
-      final bookings = (response as List)
-          .map((json) => Booking.fromJson(json as Map<String, dynamic>))
-          .toList();
+          debugPrint('📅 BookingRepository.getPendingBookings: Query result for events: ${eventsResult != null ? (eventsResult as List).length : 0} events');
 
-      return Success(bookings);
+          if (eventsResult == null || eventsResult.isEmpty) {
+            debugPrint('⚠️ BookingRepository.getPendingBookings: Lecturer has no events');
+            return Success([]);
+          }
+
+          final eventIds = (eventsResult as List)
+              .map((e) => e['Id'] as String)
+              .toList();
+
+          debugPrint('✅ BookingRepository.getPendingBookings: Lecturer has ${eventIds.length} events');
+          for (final event in (eventsResult as List)) {
+            debugPrint('   - Event: ${event['Title']} (${event['Id']})');
+          }
+
+          if (eventIds.isEmpty) {
+            debugPrint('⚠️ BookingRepository.getPendingBookings: EventIds list is empty');
+            return Success([]);
+          }
+
+          // Get pending bookings for events created by this lecturer
+          // Only get bookings that have EventId (event bookings, not lab bookings)
+          // Query all pending bookings and filter in code for simplicity and reliability
+        
+          // Query all pending bookings (we'll filter by EventId in code)
+          final response = await _supabase
+              .from('tbl_bookings')
+              .select()
+              .eq('Status', 0) // pending
+              .order('CreatedAt', ascending: false);
+
+          final allBookings = (response as List)
+              .map((json) => Booking.fromJson(json as Map<String, dynamic>))
+              .toList();
+        
+          debugPrint('📋 BookingRepository.getPendingBookings: Found ${allBookings.length} total pending bookings');
+          
+          // Debug: Show all pending bookings
+          for (final booking in allBookings) {
+            debugPrint('   Booking: ${booking.id}, EventId: ${booking.eventId}, Purpose: ${booking.purpose}');
+          }
+          
+          // Filter: Only event bookings (has EventId) for lecturer's events
+          final bookings = allBookings.where((booking) {
+            final isEventBooking = booking.eventId != null && booking.eventId!.isNotEmpty;
+            final isLecturerEvent = isEventBooking && eventIds.contains(booking.eventId);
+            
+            if (isEventBooking) {
+              debugPrint('   Event booking: ${booking.id}, EventId: ${booking.eventId}, In lecturer events: ${eventIds.contains(booking.eventId)}, Matches: $isLecturerEvent');
+            }
+            
+            return isLecturerEvent;
+          }).toList();
+
+          debugPrint('✅ BookingRepository.getPendingBookings: Returning ${bookings.length} bookings for lecturer');
+          if (bookings.isNotEmpty) {
+            for (final booking in bookings) {
+              debugPrint('   ✅ Matched booking: ${booking.id}, EventId: ${booking.eventId}');
+            }
+          }
+          return Success(bookings);
+        } catch (e, stackTrace) {
+          debugPrint('❌ BookingRepository.getPendingBookings: Error getting events: $e');
+          debugPrint('   Stack trace: $stackTrace');
+          return Failure('Failed to get pending bookings: $e');
+        }
+      } else {
+        // Admin: Get all pending bookings (including event bookings and lab bookings)
+        final response = await _supabase
+            .from('tbl_bookings')
+            .select()
+            .eq('Status', 0) // pending
+            .order('CreatedAt', ascending: false);
+
+        final bookings = (response as List)
+            .map((json) => Booking.fromJson(json as Map<String, dynamic>))
+            .toList();
+
+        return Success(bookings);
+      }
     } catch (e) {
       return Failure('Failed to get pending bookings: $e');
     }

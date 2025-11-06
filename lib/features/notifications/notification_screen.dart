@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../domain/models/notification.dart' as app_models;
 import 'notification_providers.dart';
 import '../../data/repositories/notification_repository.dart';
+import '../../data/services/notification_realtime_service.dart';
 import '../auth/auth_controller.dart';
 
 class NotificationScreen extends ConsumerStatefulWidget {
@@ -14,6 +15,19 @@ class NotificationScreen extends ConsumerStatefulWidget {
 }
 
 class _NotificationScreenState extends ConsumerState<NotificationScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Ensure realtime listener is active when notification screen is opened
+    // The listener is already started from LecturerDashboardScreen, but we ensure it's active here too
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final realtimeService = ref.read(notificationRealtimeServiceProvider);
+      if (!realtimeService.isListening) {
+        realtimeService.startListening(ref);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final notificationsAsync = ref.watch(userNotificationsProvider);
@@ -140,7 +154,7 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
 
   void _handleNotificationTap(BuildContext context, app_models.Notification notification) {
     // Navigate based on notification type
-    final type = getNotificationType(notification.content);
+    final type = getNotificationType(notification.content, title: notification.title);
     switch (type) {
       case 'booking_created':
       case 'booking_approved':
@@ -169,7 +183,7 @@ class _NotificationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isUnread = !isRead;
     final timeAgo = _getTimeAgo(notification.createdAt);
-    final notificationType = getNotificationType(notification.content);
+    final notificationType = getNotificationType(notification.content, title: notification.title);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
