@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/models/event.dart';
 import '../../domain/models/booking.dart';
 import '../../domain/models/lab.dart';
+import '../../domain/models/room.dart';
+import '../../domain/models/user.dart' as app_models;
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/booking_repository.dart';
 import '../../data/repositories/lab_repository.dart';
+import '../../data/repositories/room_repository.dart';
+import '../../data/repositories/user_repository.dart';
 import '../../core/utils/result.dart';
 import '../auth/auth_controller.dart';
 import '../bookings/booking_detail_bottomsheet.dart';
@@ -19,7 +24,7 @@ class CalendarScreen extends ConsumerStatefulWidget {
   ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
 }
 
-enum CalendarFilter { all, events, bookings }
+enum CalendarFilter { events, bookings }
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> 
     with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
@@ -28,7 +33,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   List<Event> _events = [];
   List<Booking> _bookings = [];
   Map<String, String> _roomIdToName = {}; // Cache: roomId -> room name
-  CalendarFilter _selectedFilter = CalendarFilter.all;
+  CalendarFilter _selectedFilter = CalendarFilter.events;
   bool _isLoading = false;
   DateTime? _lastRefreshTime;
   bool _isCalendarExpanded = true; // Track calendar expand/collapse state
@@ -140,9 +145,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     
     if (mounted) {
       setState(() {
-        _events = eventsResult.isSuccess ? eventsResult.data! : [];
+        // Load events and sort by createdAt descending (newest first)
+        _events = eventsResult.isSuccess 
+            ? (eventsResult.data!..sort((a, b) => b.createdAt.compareTo(a.createdAt))) 
+            : [];
         
-        // Filter bookings for selected day
+        // Filter bookings for selected day and sort by createdAt descending (newest first)
         if (bookingsResult.isSuccess) {
           _bookings = bookingsResult.data!.where((booking) {
             final bookingDate = DateTime(
@@ -152,7 +160,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
             );
             final selectedDate = DateTime(day.year, day.month, day.day);
             return isSameDay(bookingDate, selectedDate);
-          }).toList();
+          }).toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt)); // Sort newest first
         } else {
           _bookings = [];
         }
@@ -350,28 +359,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
           // Filter Chips
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  FilterChip(
-                    label: Text('All (${_events.length + _bookings.length})'),
-                    selected: _selectedFilter == CalendarFilter.all,
-                    onSelected: (selected) {
-                      setState(() => _selectedFilter = CalendarFilter.all);
-                    },
-                    selectedColor: const Color(0xFFFF6600),
-                    backgroundColor: Colors.white,
-                    labelStyle: TextStyle(
-                      color: _selectedFilter == CalendarFilter.all
-                          ? Colors.white
-                          : const Color(0xFF64748B),
-                      fontWeight: FontWeight.w600,
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilterChip(
+                    label: Center(
+                      child: Text('Events (${_events.length})'),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: Text('Events (${_events.length})'),
                     selected: _selectedFilter == CalendarFilter.events,
                     onSelected: (selected) {
                       setState(() => _selectedFilter = CalendarFilter.events);
@@ -385,9 +379,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: Text('My Bookings (${_bookings.length})'),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilterChip(
+                    label: Center(
+                      child: Text('My Bookings (${_bookings.length})'),
+                    ),
                     selected: _selectedFilter == CalendarFilter.bookings,
                     onSelected: (selected) {
                       setState(() => _selectedFilter = CalendarFilter.bookings);
@@ -401,9 +399,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                ],
+                ),
+              ],
             ),
-          ),
           ),
 
           // Events for selected day header
@@ -450,13 +448,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     // Filter based on selected filter
     List<Widget> items = [];
     
-    if (_selectedFilter == CalendarFilter.all || _selectedFilter == CalendarFilter.events) {
+    if (_selectedFilter == CalendarFilter.events) {
       for (final event in _events) {
         items.add(_buildEventCard(event));
       }
     }
     
-    if (_selectedFilter == CalendarFilter.all || _selectedFilter == CalendarFilter.bookings) {
+    if (_selectedFilter == CalendarFilter.bookings) {
       for (final booking in _bookings) {
         items.add(_buildBookingCard(booking));
       }
@@ -504,32 +502,208 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   }
 
   Widget _buildEventCard(Event event) {
+    return _CalendarEventCard(event: event);
+  }
+
+  Widget _buildBookingCard(Booking booking) {
+    return _CalendarBookingCard(booking: booking, roomIdToName: _roomIdToName);
+  }
+
+  String _formatTime(DateTime dateTime) {
+    return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[month - 1];
+  }
+
+  String _getDayName(int weekday) {
+    const days = [
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+      'Friday', 'Saturday', 'Sunday'
+    ];
+    return days[weekday - 1];
+  }
+}
+
+// Enhanced Event Card for Calendar with more information
+class _CalendarEventCard extends ConsumerStatefulWidget {
+  final Event event;
+
+  const _CalendarEventCard({required this.event});
+
+  @override
+  ConsumerState<_CalendarEventCard> createState() => _CalendarEventCardState();
+}
+
+class _CalendarEventCardState extends ConsumerState<_CalendarEventCard> {
+  List<Room> _rooms = [];
+  Lab? _lab;
+  bool _isLoadingInfo = true;
+  app_models.User? _creator;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEventInfo();
+  }
+
+  Future<void> _loadEventInfo() async {
+    try {
+      final eventRepository = EventRepository();
+      final roomRepository = RoomRepository();
+      final labRepository = LabRepository();
+      final userRepository = UserRepository();
+
+      // Load creator
+      final creatorResult = await userRepository.getUserById(widget.event.createdBy);
+      if (creatorResult.isSuccess && creatorResult.data != null && mounted) {
+        setState(() => _creator = creatorResult.data);
+      }
+
+      // Load rooms
+      final roomIdsResult = await eventRepository.getEventRoomIds(widget.event.id);
+      List<Room> loadedRooms = [];
+      String? labId;
+
+      if (roomIdsResult.isSuccess && roomIdsResult.data != null && roomIdsResult.data!.isNotEmpty) {
+        for (final roomId in roomIdsResult.data!) {
+          final roomResult = await roomRepository.getRoomById(roomId);
+          if (roomResult.isSuccess && roomResult.data != null) {
+            loadedRooms.add(roomResult.data!);
+            if (labId == null) {
+              try {
+                final supabase = Supabase.instance.client;
+                final roomResponse = await supabase
+                    .from('tbl_rooms')
+                    .select('LabId')
+                    .eq('Id', roomId)
+                    .maybeSingle();
+                if (roomResponse != null && roomResponse['LabId'] != null) {
+                  labId = roomResponse['LabId']?.toString();
+                }
+              } catch (e) {
+                debugPrint('Error getting LabId: $e');
+              }
+            }
+          }
+        }
+      }
+
+      // Load lab
+      if (labId != null && labId.isNotEmpty) {
+        final labResult = await labRepository.getLabById(labId);
+        if (labResult.isSuccess && labResult.data != null && mounted) {
+          setState(() => _lab = labResult.data);
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _rooms = loadedRooms;
+          _isLoadingInfo = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading event info: $e');
+      if (mounted) {
+        setState(() => _isLoadingInfo = false);
+      }
+    }
+  }
+
+  String _formatTime(DateTime dateTime) {
+    return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        // Show event details in a dialog
+        // Show detailed event dialog
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text(event.title),
+            title: Text(widget.event.title),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (event.description != null) ...[
+                  if (widget.event.description != null) ...[
                     const Text(
                       'Description:',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
-                    Text(event.description!),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.event.description!,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(height: 16),
                   ],
-                  if (event.startDate != null && event.endDate != null) ...[
+                  if (widget.event.startDate != null && widget.event.endDate != null) ...[
                     const Text(
                       'Time:',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
-                    Text('${_formatTime(event.startDate!)} - ${_formatTime(event.endDate!)}'),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${_formatTime(widget.event.startDate!)} - ${_formatTime(widget.event.endDate!)}',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_creator != null) ...[
+                    const Text(
+                      'Lecturer:',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _creator!.fullname,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_lab != null) ...[
+                    const Text(
+                      'Lab:',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _lab!.name,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_rooms.isNotEmpty) ...[
+                    Text(
+                      'Room${_rooms.length > 1 ? 's' : ''}:',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _rooms.map((r) => r.name).join(', '),
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (widget.event.capacity != null) ...[
+                    const Text(
+                      'Capacity:',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${widget.event.capacity} people',
+                      style: const TextStyle(fontSize: 14),
+                    ),
                   ],
                 ],
               ),
@@ -544,93 +718,248 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         );
       },
       child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFF1A73E8), width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 4,
-                height: 60,
-                decoration: BoxDecoration(
-                color: const Color(0xFF1A73E8),
-                  borderRadius: BorderRadius.circular(2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with title and badge
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.event.title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A73E8),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Event',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            // Description preview
+            if (widget.event.description != null && widget.event.description!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                widget.event.description!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey[600],
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                          event.title,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E293B),
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                          color: const Color(0xFF1A73E8),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        child: const Text(
-                          'Event',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
+            ],
+            
+            const SizedBox(height: 12),
+            
+            // Time
+            if (widget.event.startDate != null && widget.event.endDate != null)
+              Row(
+                children: [
+                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${_formatTime(widget.event.startDate!)} - ${_formatTime(widget.event.endDate!)}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w500,
                     ),
-                  if (event.startDate != null && event.endDate != null) ...[
-                    const SizedBox(height: 8),
+                  ),
+                ],
+              ),
+            
+            // Lecturer
+            if (_creator != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.person_outline, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Lecturer: ${_creator!.fullname}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            
+            // Lab and Rooms
+            if (_lab != null || _rooms.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if (_lab != null) ...[
+                    Icon(Icons.science, size: 16, color: Colors.orange[700]),
+                    const SizedBox(width: 6),
                     Text(
-                      '${_formatTime(event.startDate!)} - ${_formatTime(event.endDate!)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
+                      _lab!.name,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.orange[700],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                  if (_lab != null && _rooms.isNotEmpty) const SizedBox(width: 12),
+                  if (_rooms.isNotEmpty) ...[
+                    Icon(Icons.room, size: 16, color: Colors.blue[700]),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _rooms.length == 1
+                            ? _rooms.first.name
+                            : '${_rooms.length} rooms',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.blue[700],
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ],
               ),
+            ],
+            
+            // Capacity
+            if (widget.event.capacity != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.people, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Capacity: ${widget.event.capacity} people',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ],
-          ),
+          ],
+        ),
       ),
     );
   }
+}
 
-  Widget _buildBookingCard(Booking booking) {
-    final statusColor = booking.isPending ? const Color(0xFFF59E0B)
-        : booking.isApproved ? const Color(0xFF10B981)
-        : booking.isRejected ? const Color(0xFFEF4444)
-        : const Color(0xFF64748B);
-    
-    final borderColor = booking.isPending ? const Color(0xFFF59E0B)
-        : booking.isApproved ? const Color(0xFF10B981)
-        : booking.isRejected ? const Color(0xFFEF4444)
-        : const Color(0xFF64748B);
-    
+// Enhanced Booking Card for Calendar - shows Event Name and Creator instead of Room
+class _CalendarBookingCard extends ConsumerStatefulWidget {
+  final Booking booking;
+  final Map<String, String> roomIdToName;
+
+  const _CalendarBookingCard({
+    required this.booking,
+    required this.roomIdToName,
+  });
+
+  @override
+  ConsumerState<_CalendarBookingCard> createState() => _CalendarBookingCardState();
+}
+
+class _CalendarBookingCardState extends ConsumerState<_CalendarBookingCard> {
+  Event? _event;
+  app_models.User? _creator;
+  bool _isLoadingInfo = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEventAndCreator();
+  }
+
+  Future<void> _loadEventAndCreator() async {
+    if (widget.booking.eventId == null || widget.booking.eventId!.isEmpty) {
+      setState(() => _isLoadingInfo = false);
+      return;
+    }
+
+    try {
+      final eventRepository = EventRepository();
+      final userRepository = UserRepository();
+
+      // Load event
+      final eventResult = await eventRepository.getEventById(widget.booking.eventId!);
+      if (eventResult.isSuccess && eventResult.data != null && mounted) {
+        setState(() => _event = eventResult.data);
+        
+        // Load creator
+        final creatorResult = await userRepository.getUserById(eventResult.data!.createdBy);
+        if (creatorResult.isSuccess && creatorResult.data != null && mounted) {
+          setState(() => _creator = creatorResult.data);
+        }
+      }
+
+      if (mounted) {
+        setState(() => _isLoadingInfo = false);
+      }
+    } catch (e) {
+      debugPrint('Error loading event/creator: $e');
+      if (mounted) {
+        setState(() => _isLoadingInfo = false);
+      }
+    }
+  }
+
+  String _formatTime(DateTime dateTime) {
+    return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = widget.booking.isPending
+        ? const Color(0xFFF59E0B)
+        : widget.booking.isApproved
+            ? const Color(0xFF10B981)
+            : widget.booking.isRejected
+                ? const Color(0xFFEF4444)
+                : const Color(0xFF64748B);
+
+    final borderColor = statusColor;
+
     return GestureDetector(
       onTap: () {
         showModalBottomSheet(
@@ -640,7 +969,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          builder: (context) => BookingDetailBottomSheet(booking: booking),
+          builder: (context) => BookingDetailBottomSheet(booking: widget.booking),
         );
       },
       child: Container(
@@ -662,14 +991,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
             // Left accent bar
             Container(
               width: 5,
-              height: 80,
+              height: 90,
               decoration: BoxDecoration(
                 color: borderColor,
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
             const SizedBox(width: 16),
-            
+
             // Booking icon
             Container(
               padding: const EdgeInsets.all(10),
@@ -684,7 +1013,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
               ),
             ),
             const SizedBox(width: 16),
-            
+
             // Booking info
             Expanded(
               child: Column(
@@ -695,7 +1024,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     children: [
                       Expanded(
                         child: Text(
-                          booking.purpose,
+                          widget.booking.purpose,
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
@@ -713,7 +1042,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          booking.bookingStatus.displayName,
+                          widget.booking.bookingStatus.displayName,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
@@ -725,7 +1054,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     ],
                   ),
                   const SizedBox(height: 10),
-                  
+
                   // Time
                   Row(
                     children: [
@@ -736,7 +1065,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '${_formatTime(booking.startTime)} - ${_formatTime(booking.endTime)}',
+                        '${_formatTime(widget.booking.startTime)} - ${_formatTime(widget.booking.endTime)}',
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -746,42 +1075,87 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                     ],
                   ),
                   const SizedBox(height: 6),
-                  
-                  // Room Name
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.meeting_room,
-                        size: 16,
-                        color: Color(0xFF475569),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Builder(
-                          builder: (context) {
-                            final roomName = _roomIdToName[booking.roomId];
-                            debugPrint('🔍 Booking roomId: ${booking.roomId}');
-                            debugPrint('🔍 Found room name: ${roomName ?? "NOT FOUND"}');
-                            debugPrint('🔍 Available rooms: ${_roomIdToName.keys.join(", ")}');
-                            
-                            return Text(
-                              roomName ?? 'Room: ${booking.roomId}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF475569),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            );
-                          },
+
+                  // Event Name (if it's an event booking) OR Room Name
+                  if (_event != null) ...[
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.event,
+                          size: 16,
+                          color: Color(0xFF1A73E8),
                         ),
-                      ),
-                    ],
-                  ),
-                  
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _event!.title,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1A73E8),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else if (!_isLoadingInfo) ...[
+                    // Not an event booking - show room name
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.meeting_room,
+                          size: 16,
+                          color: Color(0xFF475569),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            widget.roomIdToName[widget.booking.roomId] ??
+                                'Room: ${widget.booking.roomId}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF475569),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  // Creator Name (if available)
+                  if (_creator != null) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.person_outline,
+                          size: 16,
+                          color: Color(0xFF475569),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Lecturer: ${_creator!.fullname}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF475569),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+
                   // Notes preview (if any)
-                  if (booking.notes != null && booking.notes!.isNotEmpty) ...[
+                  if (widget.booking.notes != null && widget.booking.notes!.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Row(
                       children: [
@@ -793,7 +1167,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            booking.notes!,
+                            widget.booking.notes!,
                             style: const TextStyle(
                               fontSize: 12,
                               color: Color(0xFF64748B),
@@ -813,25 +1187,5 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
         ),
       ),
     );
-  }
-
-  String _formatTime(DateTime dateTime) {
-    return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
-  }
-
-  String _getMonthName(int month) {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return months[month - 1];
-  }
-
-  String _getDayName(int weekday) {
-    const days = [
-      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday', 'Sunday'
-    ];
-    return days[weekday - 1];
   }
 }
