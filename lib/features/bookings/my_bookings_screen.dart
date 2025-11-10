@@ -192,13 +192,6 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
             color: Color(0xFF1E293B),
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Color(0xFF1E293B)),
-            onPressed: _loadBookings,
-            tooltip: 'Refresh',
-          ),
-        ],
       ),
       body: DefaultTabController(
         length: 2,
