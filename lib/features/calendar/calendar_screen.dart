@@ -693,17 +693,16 @@ class _CalendarEventCardState extends ConsumerState<_CalendarEventCard> {
                       style: const TextStyle(fontSize: 14),
                     ),
                     const SizedBox(height: 16),
-                  ],
-                  if (widget.event.capacity != null) ...[
                     const Text(
                       'Capacity:',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${widget.event.capacity} people',
+                      '${_rooms.fold<int>(0, (sum, room) => sum + room.capacity)} people',
                       style: const TextStyle(fontSize: 14),
                     ),
+                    const SizedBox(height: 16),
                   ],
                 ],
               ),
@@ -861,15 +860,15 @@ class _CalendarEventCardState extends ConsumerState<_CalendarEventCard> {
               ),
             ],
             
-            // Capacity
-            if (widget.event.capacity != null) ...[
+            // Capacity (from rooms)
+            if (_rooms.isNotEmpty) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
                   Icon(Icons.people, size: 16, color: Colors.grey[600]),
                   const SizedBox(width: 6),
                   Text(
-                    'Capacity: ${widget.event.capacity} people',
+                    'Capacity: ${_rooms.fold<int>(0, (sum, room) => sum + room.capacity)} people',
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey[700],

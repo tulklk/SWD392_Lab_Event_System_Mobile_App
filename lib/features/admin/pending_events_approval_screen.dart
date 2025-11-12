@@ -4,8 +4,10 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../domain/models/event.dart';
 import '../../domain/models/user.dart' as app_models;
+import '../../domain/models/room.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/user_repository.dart';
+import '../../data/repositories/room_repository.dart';
 
 /// Screen for Admin to approve or reject pending events created by Lecturers
 class PendingEventsApprovalScreen extends ConsumerStatefulWidget {
@@ -281,11 +283,14 @@ class _PendingEventCard extends ConsumerStatefulWidget {
 class _PendingEventCardState extends ConsumerState<_PendingEventCard> {
   app_models.User? _creator;
   bool _isLoadingCreator = false;
+  List<Room> _rooms = [];
+  bool _isLoadingRooms = false;
 
   @override
   void initState() {
     super.initState();
     _loadCreator();
+    _loadRooms();
   }
 
   Future<void> _loadCreator() async {
@@ -304,6 +309,41 @@ class _PendingEventCardState extends ConsumerState<_PendingEventCard> {
     } catch (e) {
       debugPrint('Error loading creator: $e');
       setState(() => _isLoadingCreator = false);
+    }
+  }
+
+  Future<void> _loadRooms() async {
+    setState(() => _isLoadingRooms = true);
+    try {
+      final eventRepository = ref.read(eventRepositoryProvider);
+      final roomRepository = RoomRepository();
+      
+      // Get all room IDs for event
+      final roomIdsResult = await eventRepository.getEventRoomIds(widget.event.id);
+      
+      List<Room> loadedRooms = [];
+      
+      if (roomIdsResult.isSuccess && roomIdsResult.data != null && roomIdsResult.data!.isNotEmpty) {
+        // Load all rooms
+        for (final roomId in roomIdsResult.data!) {
+          final roomResult = await roomRepository.getRoomById(roomId);
+          if (roomResult.isSuccess && roomResult.data != null) {
+            loadedRooms.add(roomResult.data!);
+          }
+        }
+      }
+      
+      if (mounted) {
+        setState(() {
+          _rooms = loadedRooms;
+          _isLoadingRooms = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading rooms: $e');
+      if (mounted) {
+        setState(() => _isLoadingRooms = false);
+      }
     }
   }
 
@@ -491,15 +531,15 @@ class _PendingEventCardState extends ConsumerState<_PendingEventCard> {
               ],
             ),
 
-            // Capacity
-            if (widget.event.capacity != null) ...[
+            // Capacity (from rooms)
+            if (_rooms.isNotEmpty) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
                   Icon(Icons.people, size: 18, color: Colors.grey[600]),
                   const SizedBox(width: 6),
                   Text(
-                    'Capacity: ${widget.event.capacity} people',
+                    'Capacity: ${_rooms.fold<int>(0, (sum, room) => sum + room.capacity)} people',
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey[700],

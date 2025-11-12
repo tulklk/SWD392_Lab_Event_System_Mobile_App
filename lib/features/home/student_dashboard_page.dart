@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../auth/auth_controller.dart';
 import '../../domain/models/event.dart';
 import '../../domain/models/room.dart';
@@ -508,7 +509,7 @@ class _StudentEventCard extends ConsumerStatefulWidget {
 }
 
 class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
-  Room? _room;
+  List<Room> _rooms = [];
   Lab? _lab;
   bool _isLoadingRoomLab = false;
   app_models.User? _creator;
@@ -544,56 +545,76 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
     setState(() => _isLoadingRoomLab = true);
     
     try {
-      debugPrint('🔄 Loading room and lab for event: ${widget.event.id}');
+      debugPrint('🔄 Loading rooms and lab for event: ${widget.event.id}');
       final eventRepository = EventRepository();
       final roomRepository = RoomRepository();
       final labRepository = LabRepository();
       
-      // Get roomId and labId for event
-      final infoResult = await eventRepository.getEventRoomAndLabInfo(widget.event.id);
+      // Get all room IDs for event
+      final roomIdsResult = await eventRepository.getEventRoomIds(widget.event.id);
       
-      if (infoResult.isSuccess && infoResult.data != null) {
-        final roomId = infoResult.data!['roomId'];
-        final labId = infoResult.data!['labId'];
-        
-        // Load Room
-        if (roomId != null && roomId.isNotEmpty) {
+      List<Room> loadedRooms = [];
+      String? labId;
+      
+      if (roomIdsResult.isSuccess && roomIdsResult.data != null && roomIdsResult.data!.isNotEmpty) {
+        // Load all rooms
+        for (final roomId in roomIdsResult.data!) {
           final roomResult = await roomRepository.getRoomById(roomId);
           if (roomResult.isSuccess && roomResult.data != null) {
-            if (mounted) {
-              setState(() => _room = roomResult.data);
-            }
-          }
-        }
-        
-        // Load Lab
-        if (labId != null && labId.isNotEmpty) {
-          final labResult = await labRepository.getLabById(labId);
-          if (labResult.isSuccess && labResult.data != null) {
-            if (mounted) {
-              setState(() => _lab = labResult.data);
-            }
-          } else {
-            // Try from Supabase if not in Hive
-            final labsResult = await labRepository.getLabsFromSupabase();
-            if (labsResult.isSuccess && labsResult.data != null) {
+            loadedRooms.add(roomResult.data!);
+            // Get lab ID from first room
+            if (labId == null) {
               try {
-                final lab = labsResult.data!.firstWhere(
-                  (l) => l.id == labId,
-                );
-                if (mounted) {
-                  setState(() => _lab = lab);
+                final supabase = Supabase.instance.client;
+                final roomResponse = await supabase
+                    .from('tbl_rooms')
+                    .select('LabId')
+                    .eq('Id', roomId)
+                    .maybeSingle();
+                if (roomResponse != null && roomResponse['LabId'] != null) {
+                  labId = roomResponse['LabId']?.toString();
                 }
               } catch (e) {
-                debugPrint('Lab with id $labId not found in Supabase');
+                debugPrint('Error getting LabId: $e');
               }
             }
           }
         }
       }
+      
+      // Load Lab
+      if (labId != null && labId.isNotEmpty) {
+        final labResult = await labRepository.getLabById(labId);
+        if (labResult.isSuccess && labResult.data != null) {
+          if (mounted) {
+            setState(() => _lab = labResult.data);
+          }
+        } else {
+          // Try from Supabase if not in Hive
+          final labsResult = await labRepository.getLabsFromSupabase();
+          if (labsResult.isSuccess && labsResult.data != null) {
+            try {
+              final lab = labsResult.data!.firstWhere(
+                (l) => l.id == labId,
+              );
+              if (mounted) {
+                setState(() => _lab = lab);
+              }
+            } catch (e) {
+              debugPrint('Lab with id $labId not found in Supabase');
+            }
+          }
+        }
+      }
+      
+      if (mounted) {
+        setState(() {
+          _rooms = loadedRooms;
+          _isLoadingRoomLab = false;
+        });
+      }
     } catch (e) {
-      debugPrint('Error loading room/lab: $e');
-    } finally {
+      debugPrint('Error loading rooms/lab: $e');
       if (mounted) {
         setState(() => _isLoadingRoomLab = false);
       }
@@ -686,21 +707,19 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
                       ),
                       Text(_lab!.name),
                     ],
-                    if (_room != null) ...[
+                    if (_rooms.isNotEmpty) ...[
                       const SizedBox(height: 12),
-                      const Text(
-                        'Room:',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                      Text(
+                        'Room${_rooms.length > 1 ? 's' : ''}:',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      Text(_room!.name),
-                    ],
-                    if (widget.event.capacity != null) ...[
+                      Text(_rooms.map((r) => r.name).join(', ')),
                       const SizedBox(height: 12),
                       const Text(
                         'Capacity:',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      Text('${widget.event.capacity} people'),
+                      Text('${_rooms.fold<int>(0, (sum, room) => sum + room.capacity)} people'),
                     ],
                   ],
                 ),
@@ -880,7 +899,7 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
                 ],
               ),
               // Lab and Room info
-              if (_lab != null || _room != null) ...[
+              if (_lab != null || _rooms.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -895,43 +914,55 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      if (_room != null) ...[
+                      if (_rooms.isNotEmpty) ...[
                         const SizedBox(width: 12),
                         Icon(Icons.room, size: 16, color: Colors.blue[700]),
                         const SizedBox(width: 4),
-                        Text(
-                          _room!.name,
+                        Expanded(
+                          child: Text(
+                            _rooms.length == 1
+                                ? _rooms.first.name
+                                : '${_rooms.length} rooms',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.blue[700],
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ] else if (_rooms.isNotEmpty) ...[
+                      Icon(Icons.room, size: 16, color: Colors.blue[700]),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          _rooms.length == 1
+                              ? _rooms.first.name
+                              : '${_rooms.length} rooms',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.blue[700],
                             fontWeight: FontWeight.w600,
                           ),
-                        ),
-                      ],
-                    ] else if (_room != null) ...[
-                      Icon(Icons.room, size: 16, color: Colors.blue[700]),
-                      const SizedBox(width: 4),
-                      Text(
-                        _room!.name,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.blue[700],
-                          fontWeight: FontWeight.w600,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ],
                 ),
               ],
-              // Capacity
-              if (widget.event.capacity != null) ...[
+              // Capacity (from rooms)
+              if (_rooms.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Icon(Icons.people, size: 16, color: Colors.grey[600]),
                     const SizedBox(width: 4),
                     Text(
-                      'Capacity: ${widget.event.capacity} people',
+                      'Capacity: ${_rooms.fold<int>(0, (sum, room) => sum + room.capacity)} people',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[600],

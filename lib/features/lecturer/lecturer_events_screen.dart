@@ -624,15 +624,15 @@ class _EventCardState extends ConsumerState<_EventCard> {
                   ],
                 ),
               ],
-              // Capacity
-              if (widget.event.capacity != null) ...[
+              // Capacity (from rooms)
+              if (_rooms.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Icon(Icons.people, size: 16, color: Colors.grey[600]),
                     const SizedBox(width: 4),
                     Text(
-                      'Capacity: ${widget.event.capacity} people',
+                      'Capacity: ${_rooms.fold<int>(0, (sum, room) => sum + room.capacity)} people',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[600],

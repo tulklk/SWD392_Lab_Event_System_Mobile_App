@@ -34,7 +34,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _capacityController = TextEditingController();
 
   // Step 1: Select Lab
   Lab? _selectedLab;
@@ -78,7 +77,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _capacityController.dispose();
     super.dispose();
   }
 
@@ -400,12 +398,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
       return;
     }
 
-    final capacityValue = int.tryParse(_capacityController.text.trim());
-    if (capacityValue == null || capacityValue <= 0) {
-      _showError('Please enter a valid capacity');
-      return;
-    }
-
     setState(() => _isSaving = true);
 
     final currentUser = ref.read(currentUserProvider);
@@ -443,7 +435,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
         createdBy: currentUser.id,
         visibility: true, // Always public
         status: 0, // Pending approval
-        capacity: capacityValue,
         imageUrl: imageUrl,
         labId: _selectedLab!.id,
         roomId: _bookEntireLab ? null : _selectedRoom?.id, // Only set roomId for single room mode
@@ -535,29 +526,6 @@ class _CreateEventScreenState extends ConsumerState<CreateEventScreen> {
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
                           return 'Please enter description';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Capacity
-                    TextFormField(
-                      controller: _capacityController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Capacity *',
-                        hintText: 'e.g. 50',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.people),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter capacity';
-                        }
-                        final capacity = int.tryParse(value.trim());
-                        if (capacity == null || capacity <= 0) {
-                          return 'Please enter a valid number';
                         }
                         return null;
                       },
