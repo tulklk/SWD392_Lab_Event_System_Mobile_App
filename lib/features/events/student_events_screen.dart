@@ -595,8 +595,9 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
       selectedRoom = roomResult;
     }
 
-    // Check capacity
-    if (widget.event.capacity != null) {
+    // Check capacity (from rooms)
+    if (_rooms.isNotEmpty) {
+      final totalCapacity = _rooms.fold<int>(0, (sum, room) => sum + room.capacity);
       final bookingRepository = BookingRepository();
       final bookingsResult = await bookingRepository.getBookingsForEvent(widget.event.id);
       
@@ -605,7 +606,7 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
             .where((b) => b.status == 1) // approved
             .length;
         
-        if (approvedCount >= widget.event.capacity!) {
+        if (approvedCount >= totalCapacity) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -798,13 +799,12 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
                       ),
                       Text(_rooms.map((r) => r.name).join(', ')),
                       const SizedBox(height: 12),
-                    ],
-                    if (widget.event.capacity != null) ...[
                       const Text(
                         'Capacity:',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
-                      Text('${widget.event.capacity} people'),
+                      Text('${_rooms.fold<int>(0, (sum, room) => sum + room.capacity)} people'),
+                      const SizedBox(height: 12),
                     ],
                   ],
                 ),
@@ -1021,15 +1021,15 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
                   ],
                 ),
               ],
-              // Capacity
-              if (widget.event.capacity != null) ...[
+              // Capacity (from rooms)
+              if (_rooms.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Icon(Icons.people, size: 16, color: Colors.grey[600]),
                     const SizedBox(width: 4),
                     Text(
-                      'Capacity: ${widget.event.capacity} people',
+                      'Capacity: ${_rooms.fold<int>(0, (sum, room) => sum + room.capacity)} people',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey[600],

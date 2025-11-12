@@ -28,7 +28,6 @@ class EventRepository {
     required String createdBy,
     bool visibility = true,
     int status = 1, // 0: draft, 1: active, 2: cancelled
-    int? capacity,
     String? imageUrl,
     String? roomId,
     String? labId,
@@ -53,9 +52,6 @@ class EventRepository {
 
       // Add optional fields if provided
       // Note: Location and RecurrenceRule are not included as they don't exist in database schema
-      if (capacity != null) {
-        eventData['Capacity'] = capacity;
-      }
       if (imageUrl != null) {
         eventData['ImageUrl'] = imageUrl;
       }
