@@ -642,6 +642,7 @@ class _EventCardState extends ConsumerState<_EventCard> {
                   ],
                 ),
               ],
+              
               if (widget.onEdit != null || widget.onDelete != null) ...[
                 const SizedBox(height: 12),
                 const Divider(),
@@ -683,11 +684,11 @@ class _EventCardState extends ConsumerState<_EventCard> {
   Color _getStatusColor(int status) {
     switch (status) {
       case 0:
-        return Colors.grey;
+        return Colors.orange; // Pending approval
       case 1:
-        return Colors.green;
+        return Colors.green; // Active
       case 2:
-        return Colors.red;
+        return Colors.red; // Rejected/Cancelled
       default:
         return Colors.grey;
     }
@@ -696,11 +697,11 @@ class _EventCardState extends ConsumerState<_EventCard> {
   IconData _getStatusIcon(int status) {
     switch (status) {
       case 0:
-        return Icons.edit_outlined;
+        return Icons.hourglass_empty; // Pending approval
       case 1:
-        return Icons.check_circle_outline;
+        return Icons.check_circle_outline; // Active
       case 2:
-        return Icons.cancel_outlined;
+        return Icons.cancel_outlined; // Rejected/Cancelled
       default:
         return Icons.help_outline;
     }
@@ -709,11 +710,11 @@ class _EventCardState extends ConsumerState<_EventCard> {
   String _getStatusText(int status) {
     switch (status) {
       case 0:
-        return 'Draft';
+        return 'Pending Approval'; // Waiting for Admin approval
       case 1:
         return 'Active';
       case 2:
-        return 'Cancelled';
+        return 'Rejected';
       default:
         return 'Unknown';
     }

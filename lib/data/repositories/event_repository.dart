@@ -468,4 +468,65 @@ class EventRepository {
       return Success([]);
     }
   }
+
+  // Get pending events (for Admin approval)
+  Future<Result<List<Event>>> getPendingEvents() async {
+    try {
+      final response = await _supabase
+          .from('tbl_events')
+          .select()
+          .eq('Status', 0) // pending only
+          .order('CreatedAt', ascending: false);
+
+      final events = (response as List)
+          .map((json) => Event.fromJson(json as Map<String, dynamic>))
+          .toList();
+
+      return Success(events);
+    } catch (e) {
+      return Failure('Failed to get pending events: $e');
+    }
+  }
+
+  // Approve event (Admin only)
+  Future<Result<void>> approveEvent(String eventId) async {
+    try {
+      debugPrint('✅ Approving event: $eventId');
+      
+      await _supabase
+          .from('tbl_events')
+          .update({
+            'Status': 1, // active
+            'LastUpdatedAt': DateTime.now().toIso8601String(),
+          })
+          .eq('Id', eventId);
+
+      debugPrint('✅ Event approved successfully');
+      return const Success(null);
+    } catch (e) {
+      debugPrint('❌ Failed to approve event: $e');
+      return Failure('Failed to approve event: $e');
+    }
+  }
+
+  // Reject event (Admin only)
+  Future<Result<void>> rejectEvent(String eventId) async {
+    try {
+      debugPrint('❌ Rejecting event: $eventId');
+      
+      await _supabase
+          .from('tbl_events')
+          .update({
+            'Status': 2, // cancelled/rejected
+            'LastUpdatedAt': DateTime.now().toIso8601String(),
+          })
+          .eq('Id', eventId);
+
+      debugPrint('✅ Event rejected successfully');
+      return const Success(null);
+    } catch (e) {
+      debugPrint('❌ Failed to reject event: $e');
+      return Failure('Failed to reject event: $e');
+    }
+  }
 }
