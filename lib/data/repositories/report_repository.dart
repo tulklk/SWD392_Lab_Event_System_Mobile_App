@@ -1,11 +1,13 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/config/supabase_config.dart';
 import '../../core/utils/result.dart';
 import '../../domain/models/report.dart';
 
 class ReportRepository {
   final SupabaseClient _supabase = Supabase.instance.client;
+  final _uuid = const Uuid();
 
   // Get all reports (Admin only)
   Future<Result<List<Report>>> getAllReports() async {
@@ -89,10 +91,12 @@ class ReportRepository {
   }) async {
     try {
       final now = DateTime.now();
+      final reportId = _uuid.v4(); // Generate UUID for report
       
       final response = await _supabase
           .from('tbl_reports')
           .insert({
+            'Id': reportId, // Add the generated UUID
             'Title': title,
             'Description': description,
             'Type': type,

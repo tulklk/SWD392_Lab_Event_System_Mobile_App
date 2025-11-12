@@ -20,6 +20,9 @@ import '../features/lecturer/create_event_screen.dart';
 import '../features/lecturer/event_registrations_screen.dart';
 import '../features/lecturer/equipment_screen.dart';
 import '../features/notifications/notification_screen.dart';
+import '../features/reports/submit_report_screen.dart';
+import '../features/reports/my_reports_screen.dart';
+import '../features/admin/manage_reports_screen.dart';
 import '../features/auth/auth_controller.dart';
 
 // Global navigator key for showing notifications from anywhere
@@ -209,6 +212,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const EquipmentScreen(),
       ),
       GoRoute(
+        path: '/reports/submit',
+        name: 'submit-report',
+        builder: (context, state) => const SubmitReportScreen(),
+      ),
+      GoRoute(
+        path: '/reports/my-reports',
+        name: 'my-reports',
+        builder: (context, state) => const MyReportsScreen(),
+      ),
+      GoRoute(
         path: '/admin',
         name: 'admin-dashboard',
         redirect: (context, state) {
@@ -264,6 +277,25 @@ final routerProvider = Provider<GoRouter>((ref) {
               return null;
             },
             builder: (context, state) => const ManageEventsScreen(),
+          ),
+          GoRoute(
+            path: 'reports',
+            name: 'manage-reports',
+            redirect: (context, state) {
+              final authState = ref.read(authControllerProvider);
+              final currentUser = authState.when(
+                data: (user) => user,
+                loading: () => null,
+                error: (_, __) => null,
+              );
+              
+              // Only admin can manage reports
+              if (currentUser?.role != Role.admin) {
+                return '/home';
+              }
+              return null;
+            },
+            builder: (context, state) => const ManageReportsScreen(),
           ),
         ],
       ),

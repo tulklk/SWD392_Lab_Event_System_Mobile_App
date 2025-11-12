@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../domain/enums/role.dart';
 import '../auth/auth_controller.dart';
 import 'seed_data_screen.dart';
@@ -219,6 +220,34 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 12),
+          
+          // Manage Reports Button (Admin only)
+          if (ref.watch(isAdminProvider))
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  context.push('/admin/reports');
+                },
+                icon: const Icon(Icons.report_outlined),
+                label: const Text(
+                  'Manage Reports',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
           const SizedBox(height: 32),
           
           // Recent Bookings Section

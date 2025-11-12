@@ -11,6 +11,7 @@ import '../bookings/my_bookings_screen.dart';
 import '../bookings/booking_providers.dart';
 import '../admin/admin_dashboard_screen.dart';
 import '../profile/profile_screen.dart';
+import '../reports/my_reports_screen.dart';
 import '../../domain/enums/role.dart';
 import '../auth/auth_controller.dart';
 import '../notifications/notification_screen.dart';
@@ -59,11 +60,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Watch for navigation signal to My Bookings
     final navigateToMyBookings = ref.watch(navigateToMyBookingsProvider);
     if (navigateToMyBookings && isStudent) {
-      // Navigate to My Bookings tab (index 3 for students)
+      // Navigate to My Bookings tab (index 4 for students - after Reports)
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _selectedIndex != 3) {
+        if (mounted && _selectedIndex != 4) {
           setState(() {
-            _selectedIndex = 3;
+            _selectedIndex = 4;
           });
         }
       });
@@ -87,7 +88,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     List<NavigationDestination> destinations = [];
     
     if (isStudent) {
-      // Student: Only Home, Calendar, Events, and My Bookings
+      // Student: Home, Calendar, Events, Reports, and My Bookings
       screens = [
         StudentDashboardPage(
           onTabChange: (index) {
@@ -98,6 +99,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         const CalendarScreen(),
         const StudentEventsScreen(),
+        const MyReportsScreen(),
         MyBookingsScreen(
           key: ValueKey(_bookingsRefreshTrigger), // Rebuild when trigger changes
         ),
@@ -119,13 +121,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           label: 'Event',
         ),
         const NavigationDestination(
+          icon: Icon(Icons.report_rounded),
+          selectedIcon: Icon(Icons.report),
+          label: 'Reports',
+        ),
+        const NavigationDestination(
           icon: Icon(Icons.book_online_rounded),
           selectedIcon: Icon(Icons.book_online_rounded),
           label: 'My Bookings',
         ),
       ];
     } else if (isLecturer) {
-      // Lecturer: Home, Calendar, Labs, and Lab Management
+      // Lecturer: Home, Calendar, Labs, Reports, and Lab Management
       screens = [
         LecturerDashboardPage(
           onTabChange: (index) {
@@ -136,6 +143,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         const CalendarScreen(),
         const LabsScreen(),
+        const MyReportsScreen(),
         const AdminDashboardScreen(),
       ];
       destinations = [
@@ -153,6 +161,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           icon: Icon(Icons.science_rounded),
           selectedIcon: Icon(Icons.science_rounded),
           label: 'Labs',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.report_rounded),
+          selectedIcon: Icon(Icons.report),
+          label: 'Reports',
         ),
         const NavigationDestination(
           icon: Icon(Icons.manage_accounts_rounded),
