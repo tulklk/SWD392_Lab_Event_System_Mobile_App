@@ -268,8 +268,8 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
                     iconBackgroundColor: const Color(0xFF10B981).withOpacity(0.1),
                     title: 'My Bookings',
                     onTap: () {
-                      // Switch to My Bookings tab (index 3 for student)
-                      widget.onTabChange?.call(3);
+                      // Switch to My Bookings tab (index 4 for student - after Reports)
+                      widget.onTabChange?.call(4);
                     },
                   ),
                 ),

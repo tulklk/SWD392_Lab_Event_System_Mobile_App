@@ -12,6 +12,7 @@ import '../../data/repositories/booking_repository.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/event_registration_repository.dart';
 import '../../domain/models/event.dart';
+import '../reports/my_reports_screen.dart';
 
 class LecturerDashboardScreen extends ConsumerStatefulWidget {
   const LecturerDashboardScreen({super.key});
@@ -62,6 +63,7 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
     LecturerEventsScreen(
       key: ValueKey(_eventsRefreshTrigger), // Rebuild when trigger changes
     ),
+    const MyReportsScreen(), // Reports tab
     const PendingBookingsScreen(),
   ];
 
@@ -271,9 +273,9 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
               _eventsRefreshTrigger++;
             });
           }
-          // Refresh pending bookings when Approvals tab is selected (index 3)
+          // Refresh pending bookings when Approvals tab is selected (index 4 - after Reports)
           // Use post-frame callback to ensure widget is mounted before invalidating
-          if (index == 3) {
+          if (index == 4) {
             debugPrint('🔄 LecturerDashboardScreen: Scheduling Approvals tab refresh');
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
@@ -298,6 +300,11 @@ class _LecturerDashboardScreenState extends ConsumerState<LecturerDashboardScree
             icon: Icon(Icons.event_outlined),
             selectedIcon: Icon(Icons.event),
             label: 'Events',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.report_rounded),
+            selectedIcon: Icon(Icons.report),
+            label: 'Reports',
           ),
           NavigationDestination(
             icon: Icon(Icons.approval_outlined),
@@ -496,8 +503,8 @@ class _LecturerOverviewPageState extends ConsumerState<LecturerOverviewPage> {
                   subtitle: 'Review bookings',
                   color: Colors.orange,
                   onTap: () {
-                    // Navigate to approvals tab (index 3)
-                    widget.onTabChange?.call(3);
+                    // Navigate to approvals tab (index 4 - after Reports)
+                    widget.onTabChange?.call(4);
                   },
                 ),
               ),
@@ -539,7 +546,7 @@ class _LecturerOverviewPageState extends ConsumerState<LecturerOverviewPage> {
             subtitle: 'Bookings waiting review',
             color: Colors.amber,
             onTap: () {
-              widget.onTabChange?.call(2); // Navigate to Approvals tab
+              widget.onTabChange?.call(4); // Navigate to Approvals tab (index 4 - after Reports)
             },
           ),
           const SizedBox(height: 12),

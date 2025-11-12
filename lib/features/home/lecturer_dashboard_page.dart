@@ -146,26 +146,26 @@ class LecturerDashboardPage extends ConsumerWidget {
               children: [
                 Expanded(
                   child: _buildActionCard(
-                    'Manage Labs',
-                    'Configure lab settings and availability',
-                    Icons.settings_rounded,
+                    'View Labs',
+                    'Browse available labs',
+                    Icons.science_rounded,
                     const Color(0xFF1A73E8),
                         () {
-                      // Navigate to lab management (Manage tab - index 4 for lecturer)
-                      onTabChange?.call(4);
+                      // Navigate to Labs tab (index 2 for lecturer)
+                      onTabChange?.call(2);
                     },
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: _buildActionCard(
-                    'Review Bookings',
-                    'Approve or reject lab bookings',
-                    Icons.fact_check_rounded,
+                    'Admin Panel',
+                    'Manage labs and bookings',
+                    Icons.admin_panel_settings_rounded,
                     const Color(0xFFFF6600),
                         () {
-                      // Navigate to bookings tab (index 3 for lecturer)
-                      onTabChange?.call(3);
+                      // Navigate to Manage tab (index 4 for lecturer - after Reports)
+                      onTabChange?.call(4);
                     },
                   ),
                 ),
