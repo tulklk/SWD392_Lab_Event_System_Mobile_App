@@ -27,7 +27,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _selectedIndex = 0;
-  int _bookingsRefreshTrigger = 0; // Counter to trigger refresh for My Bookings
+  int _bookingsRefreshTrigger = 0; // Counter to trigger refresh for Registrations
 
   @override
   void initState() {
@@ -57,10 +57,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final isLecturer = ref.watch(isLecturerProvider);
     final isStudent = ref.watch(isStudentProvider);
     
-    // Watch for navigation signal to My Bookings
+    // Watch for navigation signal to Registrations
     final navigateToMyBookings = ref.watch(navigateToMyBookingsProvider);
     if (navigateToMyBookings && isStudent) {
-      // Navigate to My Bookings tab (index 4 for students - after Reports)
+      // Navigate to Registrations tab (index 4 for students - after Reports)
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _selectedIndex != 4) {
           setState(() {
@@ -88,7 +88,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     List<NavigationDestination> destinations = [];
     
     if (isStudent) {
-      // Student: Home, Calendar, Events, Reports, and My Bookings
+      // Student: Home, Calendar, Events, Reports, and Registrations
       screens = [
         StudentDashboardPage(
           onTabChange: (index) {
@@ -128,7 +128,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         const NavigationDestination(
           icon: Icon(Icons.book_online_rounded),
           selectedIcon: Icon(Icons.book_online_rounded),
-          label: 'My Bookings',
+          label: 'Registrations',
         ),
       ];
     } else if (isLecturer) {
@@ -201,7 +201,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         const NavigationDestination(
           icon: Icon(Icons.book_online_rounded),
           selectedIcon: Icon(Icons.book_online_rounded),
-          label: 'Bookings',
+          label: 'Registrations',
         ),
         const NavigationDestination(
           icon: Icon(Icons.admin_panel_settings_rounded),
@@ -572,9 +572,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   _selectedIndex = index;
                 });
                 
-                // My Bookings will auto-refresh via didChangeDependencies when tab becomes visible
+                // Registrations will auto-refresh via didChangeDependencies when tab becomes visible
                 if (isStudent && index == 3) {
-                  debugPrint('🔄 Switched to My Bookings tab (index 3)');
+                  debugPrint('🔄 Switched to Registrations tab (index 3)');
                 }
               },
               destinations: destinations,

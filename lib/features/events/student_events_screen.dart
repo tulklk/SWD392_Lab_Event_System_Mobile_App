@@ -670,16 +670,16 @@ class _StudentEventCardState extends ConsumerState<_StudentEventCard> {
         if (result.isSuccess) {
           setState(() => _isRegistered = true);
           
-          // Trigger refresh of My Bookings screen by incrementing the provider
+          // Trigger refresh of Registrations screen by incrementing the provider
           ref.read(myBookingsRefreshProvider.notifier).refresh();
-          // Signal navigation to My Bookings tab (index 3 for students)
+          // Signal navigation to Registrations tab (index 3 for students)
           ref.read(navigateToMyBookingsProvider.notifier).navigate();
-          debugPrint('✅ Event booking created successfully. My Bookings refresh signal sent.');
+          debugPrint('✅ Event booking created successfully. Registrations refresh signal sent.');
           
           // Show success message
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Successfully registered for event! Navigating to My Bookings...'),
+              content: Text('Successfully registered for event!'),
               backgroundColor: Colors.green,
               duration: Duration(seconds: 2),
             ),

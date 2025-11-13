@@ -266,9 +266,9 @@ class _StudentDashboardPageState extends ConsumerState<StudentDashboardPage>
                     icon: Icons.check_circle,
                     iconColor: const Color(0xFF10B981),
                     iconBackgroundColor: const Color(0xFF10B981).withOpacity(0.1),
-                    title: 'My Bookings',
+                    title: 'Registrations',
                     onTap: () {
-                      // Switch to My Bookings tab (index 4 for student - after Reports)
+                      // Switch to Registrations tab (index 4 for student - after Reports)
                       widget.onTabChange?.call(4);
                     },
                   ),

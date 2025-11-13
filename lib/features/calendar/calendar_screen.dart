@@ -384,7 +384,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                 Expanded(
                   child: FilterChip(
                     label: Center(
-                      child: Text('My Bookings (${_bookings.length})'),
+                      child: Text('Registrations (${_bookings.length})'),
                     ),
                     selected: _selectedFilter == CalendarFilter.bookings,
                     onSelected: (selected) {

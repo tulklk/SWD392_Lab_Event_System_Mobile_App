@@ -17,8 +17,10 @@ import 'pending_bookings_screen.dart';
 
 final eventRegistrationsProvider = FutureProvider.family<List<EventRegistration>, String>(
   (ref, eventId) async {
+    debugPrint('🔍 [EventRegistrationsProvider] Called with eventId: $eventId');
     final repo = ref.watch(eventRegistrationRepositoryProvider);
     final result = await repo.getRegistrationsForEvent(eventId);
+    debugPrint('📊 [EventRegistrationsProvider] Result: ${result.isSuccess ? '${result.data?.length ?? 0} registrations' : result.error}');
     return result.data ?? [];
   },
 );
@@ -93,6 +95,8 @@ class _EventRegistrationsScreenState extends ConsumerState<EventRegistrationsScr
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('🎯 EventRegistrationsScreen: Building with eventId = ${widget.eventId}');
+    
     final registrationsAsync = ref.watch(eventRegistrationsProvider(widget.eventId));
     final eventAsync = ref.watch(eventDetailsProvider(widget.eventId));
 

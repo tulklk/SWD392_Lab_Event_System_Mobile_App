@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// A simple counter to signal a refresh for the My Bookings screen.
+/// A simple counter to signal a refresh for the Registrations screen.
 /// Increment its state to trigger a refresh.
 class MyBookingsRefreshNotifier extends Notifier<int> {
   @override
@@ -17,7 +17,7 @@ final myBookingsRefreshProvider = NotifierProvider<MyBookingsRefreshNotifier, in
   return MyBookingsRefreshNotifier();
 });
 
-/// A provider to signal navigation to My Bookings tab.
+/// A provider to signal navigation to Registrations tab.
 /// Set to true to trigger navigation.
 class NavigateToMyBookingsNotifier extends Notifier<bool> {
   @override
