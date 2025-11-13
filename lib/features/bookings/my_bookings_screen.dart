@@ -54,7 +54,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Refresh when app resumes
     if (state == AppLifecycleState.resumed && mounted) {
-      debugPrint('📱 My Bookings: App resumed, refreshing...');
+      debugPrint('📱 Registrations: App resumed, refreshing...');
       _refreshData();
     }
   }
@@ -64,7 +64,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     super.didUpdateWidget(oldWidget);
     // When widget key changes (triggered by refresh), reload bookings
     if (widget.key != oldWidget.key) {
-      debugPrint('🔄 My Bookings: Widget key changed, refreshing...');
+      debugPrint('🔄 Registrations: Widget key changed, refreshing...');
       _lastRefreshTime = null; // Reset to force refresh
       _refreshData();
     }
@@ -77,7 +77,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     final now = DateTime.now();
     if (_lastRefreshTime == null || 
         now.difference(_lastRefreshTime!).inSeconds > 2) {
-      debugPrint('🔄 My Bookings: Dependencies changed, refreshing...');
+      debugPrint('🔄 Registrations: Dependencies changed, refreshing...');
       _refreshData();
     }
   }
@@ -86,24 +86,24 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
     final now = DateTime.now();
     if (_lastRefreshTime == null || 
         now.difference(_lastRefreshTime!).inSeconds > 2) {
-      debugPrint('🔄 My Bookings: Checking for refresh...');
+      debugPrint('🔄 Registrations: Checking for refresh...');
       _refreshData();
     }
   }
   
   // Public method to refresh from outside
   void refreshBookings() {
-    debugPrint('🔄 My Bookings: Manual refresh triggered');
+    debugPrint('🔄 Registrations: Manual refresh triggered');
     _refreshData();
   }
 
   Future<void> _refreshData() async {
     if (_isLoading) {
-      debugPrint('⏭️ My Bookings: Already loading, skipping...');
+      debugPrint('⏭️ Registrations: Already loading, skipping...');
       return;
     }
     
-    debugPrint('🔄 My Bookings: Refreshing data...');
+    debugPrint('🔄 Registrations: Refreshing data...');
     _lastRefreshTime = DateTime.now();
     await _loadBookings();
   }
@@ -185,7 +185,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen>
         elevation: 0,
         centerTitle: true,
         title: const Text(
-          'My Bookings',
+          'Registrations',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w700,

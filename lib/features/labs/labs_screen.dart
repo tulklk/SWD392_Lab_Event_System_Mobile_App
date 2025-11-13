@@ -653,7 +653,7 @@ class _LabsScreenState extends ConsumerState<LabsScreen>
       'roomName': room.name,
     });
     // Note: Booking form will return true if booking was successful
-    // Parent screens (like My Bookings) can listen to this result
+    // Parent screens (like Registrations) can listen to this result
   }
 
   Widget _buildStatItem(String count, String label, Color color) {

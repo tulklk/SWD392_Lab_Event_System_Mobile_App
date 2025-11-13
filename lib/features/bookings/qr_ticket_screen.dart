@@ -1,11 +1,98 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../domain/models/booking.dart';
+import '../../domain/models/room.dart';
+import '../../domain/models/lab.dart';
+import '../../domain/models/user.dart' as app_models;
+import '../../data/repositories/room_repository.dart';
+import '../../data/repositories/lab_repository.dart';
+import '../../data/repositories/event_repository.dart';
+import '../../data/repositories/user_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class QRTicketScreen extends StatelessWidget {
+class QRTicketScreen extends ConsumerStatefulWidget {
   final Booking booking;
   
   const QRTicketScreen({super.key, required this.booking});
+
+  @override
+  ConsumerState<QRTicketScreen> createState() => _QRTicketScreenState();
+}
+
+class _QRTicketScreenState extends ConsumerState<QRTicketScreen> {
+  Room? _room;
+  Lab? _lab;
+  app_models.User? _lecturer;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDetails();
+  }
+
+  Future<void> _loadDetails() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      // Load Room
+      final roomRepository = RoomRepository();
+      final roomResult = await roomRepository.getRoomById(widget.booking.roomId);
+      
+      if (roomResult.isSuccess && roomResult.data != null) {
+        _room = roomResult.data;
+        
+        // Load Lab from Room
+        try {
+          final supabase = Supabase.instance.client;
+          final roomResponse = await supabase
+              .from('tbl_rooms')
+              .select('LabId')
+              .eq('Id', widget.booking.roomId)
+              .maybeSingle();
+          
+          if (roomResponse != null && roomResponse['LabId'] != null) {
+            final labId = roomResponse['LabId']?.toString();
+            if (labId != null) {
+              final labRepository = LabRepository();
+              final labResult = await labRepository.getLabById(labId);
+              if (labResult.isSuccess && labResult.data != null) {
+                _lab = labResult.data;
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Error loading lab: $e');
+        }
+      }
+      
+      // Load Lecturer from Event
+      if (widget.booking.eventId != null) {
+        final eventRepository = ref.read(eventRepositoryProvider);
+        final eventResult = await eventRepository.getEventById(widget.booking.eventId!);
+        
+        if (eventResult.isSuccess && eventResult.data != null) {
+          final event = eventResult.data!;
+          
+          // Load lecturer
+          final userRepository = ref.read(userRepositoryProvider);
+          final lecturerResult = await userRepository.getUserById(event.createdBy);
+          
+          if (lecturerResult.isSuccess && lecturerResult.data != null) {
+            _lecturer = lecturerResult.data;
+          }
+        }
+      }
+      
+    } catch (e) {
+      debugPrint('Error loading details: $e');
+    }
+    
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +121,7 @@ class QRTicketScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                booking.bookingStatus.displayName,
+                widget.booking.bookingStatus.displayName,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
@@ -107,14 +194,14 @@ class QRTicketScreen extends StatelessWidget {
                       children: [
                         // QR Code
                         QrImageView(
-                          data: booking.id,
+                          data: widget.booking.id,
                           version: QrVersions.auto,
                           size: 200.0,
                           backgroundColor: Colors.white,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'FPT-LAB-${booking.id.substring(0, 8)}',
+                          'FPT-LAB-${widget.booking.id.substring(0, 8)}',
                           style: const TextStyle(
                             fontSize: 10,
                             color: Color(0xFF64748B),
@@ -148,7 +235,7 @@ class QRTicketScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    booking.purpose,
+                    widget.booking.purpose,
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -159,20 +246,51 @@ class QRTicketScreen extends StatelessWidget {
                   
                   _buildDetailRow(
                     Icons.access_time,
-                    '${_formatLongDate(booking.date)}\n${_formatTime(booking.start)} - ${_formatTime(booking.end)}',
+                    '${_formatLongDate(widget.booking.date)}\n${_formatTime(widget.booking.start)} - ${_formatTime(widget.booking.end)}',
                   ),
                   const SizedBox(height: 12),
                   
-                  _buildDetailRow(
-                    Icons.meeting_room,
-                    'Room ID: ${booking.roomId}',
-                  ),
+                  // Loading indicator
+                  if (_isLoading) ...[
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                  ] else ...[
+                    // Lab
+                    if (_lab != null) ...[
+                      _buildDetailRow(
+                        Icons.science,
+                        _lab!.name,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    
+                    // Room
+                    if (_room != null) ...[
+                      _buildDetailRow(
+                        Icons.meeting_room,
+                        _room!.name,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    
+                    // Lecturer
+                    if (_lecturer != null) ...[
+                      _buildDetailRow(
+                        Icons.person_outline,
+                        'Lecturer: ${_lecturer!.fullname}',
+                      ),
+                    ],
+                  ],
                   
-                  if (booking.notes != null && booking.notes!.isNotEmpty) ...[
+                  if (widget.booking.notes != null && widget.booking.notes!.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     _buildDetailRow(
                       Icons.note,
-                      booking.notes!,
+                      widget.booking.notes!,
                     ),
                   ],
                   
@@ -190,7 +308,7 @@ class QRTicketScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'FPT-LAB-${booking.id.substring(0, 12)}',
+                    'FPT-LAB-${widget.booking.id.substring(0, 12)}',
                     style: const TextStyle(
                       fontSize: 16,
                       color: Color(0xFF1E293B),
@@ -316,11 +434,11 @@ class QRTicketScreen extends StatelessWidget {
   }
 
   Color _getStatusColor() {
-    if (booking.isApproved) {
+    if (widget.booking.isApproved) {
       return const Color(0xFF10B981);
-    } else if (booking.isPending) {
+    } else if (widget.booking.isPending) {
       return const Color(0xFFF59E0B);
-    } else if (booking.isRejected) {
+    } else if (widget.booking.isRejected) {
       return const Color(0xFFEF4444);
     } else {
       return const Color(0xFF64748B);

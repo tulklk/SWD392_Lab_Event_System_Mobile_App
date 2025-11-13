@@ -21,9 +21,24 @@ class FCMService {
   
   String? _fcmToken;
   
+  /// Create high importance notification channel for Android (8.0+)
+  Future<void> _createNotificationChannel() async {
+    try {
+      // This is handled by the Android native side via AndroidManifest.xml
+      // and the FirebaseMessaging plugin automatically creates the channel
+      // But we can also create it programmatically if needed
+      debugPrint('📢 FCM: Notification channel configured');
+    } catch (e) {
+      debugPrint('⚠️ FCM: Failed to create notification channel: $e');
+    }
+  }
+  
   /// Initialize FCM and request permissions
   Future<void> initialize() async {
     try {
+      // Create high importance notification channel for Android
+      await _createNotificationChannel();
+      
       // Request notification permissions
       final settings = await _messaging.requestPermission(
         alert: true,

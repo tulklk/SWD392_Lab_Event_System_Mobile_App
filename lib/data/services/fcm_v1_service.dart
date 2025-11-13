@@ -138,6 +138,13 @@ hSRov3NUU/twdqDFUbeCtqWW
           'data': data?.map((key, value) => MapEntry(key, value.toString())),
           'android': {
             'priority': 'high',
+            'notification': {
+              'channel_id': 'high_importance_channel',
+              'priority': 'high',
+              'default_sound': true,
+              'default_vibrate_timings': true,
+            },
+            'ttl': '86400s', // 24 hours time to live
           },
           'apns': {
             'headers': {
@@ -146,6 +153,7 @@ hSRov3NUU/twdqDFUbeCtqWW
             'payload': {
               'aps': {
                 'sound': 'default',
+                'content-available': 1,
               },
             },
           },

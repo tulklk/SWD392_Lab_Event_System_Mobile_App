@@ -58,7 +58,34 @@ class EventRegistrationRepository {
   // Note: Event registrations are stored in tbl_bookings with EventId
   Future<Result<List<EventRegistration>>> getRegistrationsForEvent(String eventId) async {
     try {
-      debugPrint('🔍 Getting registrations for event: $eventId');
+      debugPrint('═══════════════════════════════════════════════════════════');
+      debugPrint('🔍 EventRegistrationRepository.getRegistrationsForEvent()');
+      debugPrint('   EventId: $eventId');
+      debugPrint('   EventId type: ${eventId.runtimeType}');
+      debugPrint('   EventId length: ${eventId.length}');
+      debugPrint('═══════════════════════════════════════════════════════════');
+      
+      // First, let's check if there are ANY bookings with EventId not null
+      final allBookingsWithEventId = await _supabase
+          .from('tbl_bookings')
+          .select()
+          .not('EventId', 'is', null)
+          .limit(5);
+      
+      debugPrint('📊 Sample bookings with EventId (first 5):');
+      if (allBookingsWithEventId != null && allBookingsWithEventId.isNotEmpty) {
+        for (var booking in allBookingsWithEventId) {
+          debugPrint('   - Booking ID: ${booking['Id']}');
+          debugPrint('     EventId: ${booking['EventId']} (type: ${booking['EventId'].runtimeType})');
+          debugPrint('     UserId: ${booking['UserId']}');
+          debugPrint('     Status: ${booking['Status']}');
+        }
+      } else {
+        debugPrint('   No bookings with EventId found in database!');
+      }
+      
+      debugPrint('');
+      debugPrint('🔍 Now querying for bookings with EventId = $eventId');
       
       // Query from tbl_bookings where EventId matches
       final response = await _supabase
@@ -67,22 +94,38 @@ class EventRegistrationRepository {
           .eq('EventId', eventId)
           .order('CreatedAt', ascending: false);
 
+      debugPrint('📥 Query response:');
+      debugPrint('   Is null: ${response == null}');
+      debugPrint('   Is empty: ${response?.isEmpty ?? true}');
+      debugPrint('   Count: ${response?.length ?? 0}');
+
       if (response == null || response.isEmpty) {
         debugPrint('⚠️ No bookings found for event: $eventId');
+        debugPrint('   This could mean:');
+        debugPrint('   1. No student has registered for this event yet');
+        debugPrint('   2. EventId in bookings doesn\'t match (case-sensitive?)');
+        debugPrint('   3. Bookings exist but EventId column is null');
+        debugPrint('═══════════════════════════════════════════════════════════');
         return Success(<EventRegistration>[]);
       }
 
       debugPrint('✅ Found ${response.length} bookings for event: $eventId');
+      debugPrint('   Booking IDs: ${(response as List).map((b) => b['Id']).take(3).join(', ')}${response.length > 3 ? '...' : ''}');
 
       // Convert Booking to EventRegistration
       final registrations = (response as List)
           .map((json) => _bookingToEventRegistration(json as Map<String, dynamic>))
           .toList();
 
+      debugPrint('✅ Converted to ${registrations.length} EventRegistration objects');
+      debugPrint('═══════════════════════════════════════════════════════════');
+
       return Success(registrations);
     } catch (e, stackTrace) {
+      debugPrint('═══════════════════════════════════════════════════════════');
       debugPrint('❌ Error getting registrations: $e');
       debugPrint('Stack trace: $stackTrace');
+      debugPrint('═══════════════════════════════════════════════════════════');
       return Failure('Failed to get registrations: $e');
     }
   }
